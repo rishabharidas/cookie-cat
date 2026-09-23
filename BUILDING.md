@@ -130,7 +130,9 @@ and publishes them directly to your GitHub Releases page!
 |---|---|---|
 | **Drag & Reposition** | **Left Click + Drag** | Native OS window drag anywhere on the screen |
 | **Pet the Cat** | **Left Click** | Bouncing happy reaction with floating `❤️` hearts |
+| **Toggle 3D Model** | **`M`** | Switch between Blender 3D Model (`cat.glb`) and Stylized Procedural |
 | **Cycle Coat** | **Right Click** or **`C`** | Cycle: Biscuit -> White -> Grey |
 | **Cycle Size** | **`S`** | Cycle: Small (80%) -> Normal (100%) -> Large (130%) -> Extra Large (160%) |
 | **Sleep / Nap** | **`Space`** | Toggles nap mode with floating `z Z Z` particles |
+| **Help** | **`H`** | Print keyboard shortcuts and controls in terminal |
 | **Quit** | **`Escape`** or **`Q`** | Close widget |

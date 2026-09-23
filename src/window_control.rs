@@ -51,48 +51,13 @@ fn update_cursor_pos(
     cursor_pos.0 = window.cursor_position();
 }
 
-/// Dynamically enables hit-testing only when cursor is near the cat.
-/// When cursor is elsewhere, clicks pass straight through to background apps!
+/// Ensures hit testing is enabled for window interactions and dragging.
 fn update_cursor_hit_test_3d(
-    cursor_pos: Res<CursorScreenPos>,
-    config: Res<CatConfig>,
-    mut q_window: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
-    q_cat: Query<&Transform, With<CatRoot>>,
-    q_camera: Query<(&Camera, &GlobalTransform)>,
+    mut q_window: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
-    let Ok((window, mut cursor_options)) = q_window.single_mut() else {
-        return;
-    };
-
-    if window.decorations {
+    if let Ok(mut cursor_options) = q_window.single_mut() {
         cursor_options.hit_test = true;
-        return;
     }
-
-    let Some(mouse_px) = cursor_pos.0 else {
-        cursor_options.hit_test = true;
-        return;
-    };
-
-    let Ok(cat_transform) = q_cat.single() else {
-        return;
-    };
-
-    let Ok((camera, camera_transform)) = q_camera.single() else {
-        return;
-    };
-
-    // Project 3D cat position to 2D screen pixels
-    let cat_3d_pos = cat_transform.translation + Vec3::new(0.0, 0.45, 0.0);
-    let Ok(cat_screen_px) = camera.world_to_viewport(camera_transform, cat_3d_pos) else {
-        cursor_options.hit_test = true;
-        return;
-    };
-
-    let effective_radius = CAT_SCREEN_RADIUS * config.size.scale_factor();
-    let is_hovering = cat_screen_px.distance(mouse_px) <= effective_radius;
-
-    cursor_options.hit_test = is_hovering;
 }
 
 /// Handles mouse clicks: left-click to drag/pet, right-click to cycle coat.
@@ -127,11 +92,9 @@ fn handle_mouse_interactions_3d(
 
     // Update cat look target towards cursor if cursor is near
     if is_on_cat {
-        config.look_target = cat_transform.translation + Vec3::new(
-            (mouse_px.x - cat_screen_px.x) * 0.01,
-            0.5,
-            (mouse_px.y - cat_screen_px.y) * 0.01,
-        );
+        let dx = (mouse_px.x - cat_screen_px.x) * 0.012;
+        let dy = (cat_screen_px.y - mouse_px.y) * 0.012; // screen Y is inverted relative to world Y
+        config.look_target = cat_transform.translation + Vec3::new(dx, 0.5 + dy, 2.5);
     }
 
     if !is_on_cat {
@@ -165,6 +128,12 @@ fn handle_keyboard_shortcuts(
     mut config: ResMut<CatConfig>,
     mut exit: MessageWriter<AppExit>,
 ) {
+    // 'M' -> Toggle Model Type (Blender 3D Model <-> Procedural)
+    if keyboard.just_pressed(KeyCode::KeyM) {
+        config.model_type = config.model_type.toggle();
+        println!("Cat model switched to: {}", config.model_type.display_name());
+    }
+
     // 'C' -> Cycle Coat Color (Biscuit -> White -> Grey)
     if keyboard.just_pressed(KeyCode::KeyC) {
         config.coat = config.coat.next();
@@ -185,6 +154,18 @@ fn handle_keyboard_shortcuts(
             CatAiState::Sleeping
         };
         println!("Cat state: {:?}", config.state);
+    }
+
+    // 'H' -> Print Help / Controls
+    if keyboard.just_pressed(KeyCode::KeyH) {
+        println!("=== Desktop Cat Controls ===");
+        println!("Left Click + Drag: Move window");
+        println!("Left Click: Pet cat & bounce with hearts");
+        println!("Right Click or 'C': Cycle coat color");
+        println!("'M': Toggle 3D Blender Model (cat.glb) / Procedural");
+        println!("'S': Cycle size (Small / Normal / Large / ExtraLarge)");
+        println!("Space: Sleep / Awake toggle");
+        println!("'Q' or Esc: Quit");
     }
 
     // 'Escape' or 'Q' -> Quit Application

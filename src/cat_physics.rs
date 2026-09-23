@@ -211,12 +211,13 @@ fn update_head_look(
     let dt = time.delta_secs();
 
     // Calculate direction from head to look target
-    let head_pos = Vec3::new(0.0, 0.9, 0.5);
+    let head_pos = Vec3::new(0.0, 0.85, 0.45);
     let to_target = (config.look_target - head_pos).normalize_or_zero();
 
     // Calculate yaw and pitch within comfortable neck limits
-    let target_yaw = (-to_target.x).clamp(-0.65, 0.65);
-    let target_pitch = to_target.y.clamp(-0.40, 0.40);
+    // Positive yaw turns head right (+X), negative pitch tilts head up (+Y)
+    let target_yaw = (to_target.x * 0.85).clamp(-0.65, 0.65);
+    let target_pitch = (-to_target.y * 0.70).clamp(-0.40, 0.40);
 
     let target_rot = Quat::from_euler(EulerRot::YXZ, target_yaw, target_pitch, 0.0);
     transform.rotation = transform.rotation.slerp(target_rot, 5.0 * dt);
