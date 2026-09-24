@@ -128,12 +128,6 @@ fn handle_keyboard_shortcuts(
     mut config: ResMut<CatConfig>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    // 'M' -> Toggle Model Type (Blender 3D Model <-> Procedural)
-    if keyboard.just_pressed(KeyCode::KeyM) {
-        config.model_type = config.model_type.toggle();
-        println!("Cat model switched to: {}", config.model_type.display_name());
-    }
-
     // 'C' -> Cycle Coat Color (Biscuit -> White -> Grey)
     if keyboard.just_pressed(KeyCode::KeyC) {
         config.coat = config.coat.next();
@@ -162,7 +156,6 @@ fn handle_keyboard_shortcuts(
         println!("Left Click + Drag: Move window");
         println!("Left Click: Pet cat & bounce with hearts");
         println!("Right Click or 'C': Cycle coat color");
-        println!("'M': Toggle 3D Blender Model (cat.glb) / Procedural");
         println!("'S': Cycle size (Small / Normal / Large / ExtraLarge)");
         println!("Space: Sleep / Awake toggle");
         println!("'Q' or Esc: Quit");
