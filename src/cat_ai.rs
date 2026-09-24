@@ -5,6 +5,7 @@
 //! and always returning to face the screen when resting.
 
 use bevy::prelude::*;
+use bevy::window::{PrimaryWindow, WindowPosition};
 use crate::cat_model::CatRoot;
 use crate::config::{CatAiState, CatConfig};
 
@@ -75,17 +76,11 @@ pub struct EmotionParticle3d {
     pub initial_scale: Vec3,
 }
 
-/// Roaming area limits in 3D world space.
-const ROAM_MIN_X: f32 = -1.6;
-const ROAM_MAX_X: f32 = 1.6;
-const ROAM_MIN_Z: f32 = -0.6;
-const ROAM_MAX_Z: f32 = 0.6;
-
 /// High-level AI state machine: decides when to walk, sit, sniff, or nap.
 fn update_cat_ai(
     time: Res<Time>,
     mut config: ResMut<CatConfig>,
-    q_root: Query<&Transform, With<CatRoot>>,
+    q_window: Query<&Window, With<PrimaryWindow>>,
 ) {
     let dt = time.delta_secs();
 
@@ -110,19 +105,30 @@ fn update_cat_ai(
     config.state_timer -= dt;
 
     if config.state_timer <= 0.0 {
-        let _current_pos = q_root
-            .single()
-            .map(|t| t.translation)
-            .unwrap_or(Vec3::ZERO);
-
         match config.state {
             CatAiState::Idle | CatAiState::Sniffing | CatAiState::Sitting => {
-                // Generate a pseudo-random new destination
+                // Generate a pseudo-random new destination on the desktop
                 let seed = time.elapsed_secs();
-                let rand_x = ((seed * 1.33).sin() * 0.5 + 0.5) * (ROAM_MAX_X - ROAM_MIN_X) + ROAM_MIN_X;
-                let rand_z = ((seed * 2.71).cos() * 0.5 + 0.5) * (ROAM_MAX_Z - ROAM_MIN_Z) + ROAM_MIN_Z;
+                let current_pos = config.desktop_pos.unwrap_or_else(|| {
+                    q_window.single().map(|w| {
+                        if let WindowPosition::At(pos) = w.position {
+                            pos.as_vec2()
+                        } else {
+                            Vec2::ZERO
+                        }
+                    }).unwrap_or(Vec2::ZERO)
+                });
 
-                config.roam_target = Vec3::new(rand_x, 0.0, rand_z);
+                // Move left or right, up or down a bit
+                let dx = ((seed * 1.33).sin() * 400.0) - 200.0;
+                let dy = ((seed * 2.71).cos() * 200.0) - 100.0;
+
+                config.desktop_target = current_pos + Vec2::new(dx, dy);
+
+                // Roughly clamp to typical screen bounds so it doesn't wander off forever
+                config.desktop_target.x = config.desktop_target.x.clamp(0.0, 1920.0 - 480.0);
+                config.desktop_target.y = config.desktop_target.y.clamp(0.0, 1080.0 - 340.0);
+
                 config.state = CatAiState::Walking;
                 // Timeout in case it gets stuck
                 config.state_timer = 6.0;
@@ -149,48 +155,70 @@ fn update_cat_ai(
     }
 }
 
-/// Moves and turns the cat towards its roaming destination.
+/// Moves the window and turns the cat to face the walking direction.
 /// When resting/idle, smoothly faces the screen towards the user.
 fn update_roam_movement(
     time: Res<Time>,
     mut config: ResMut<CatConfig>,
     mut q_root: Query<&mut Transform, With<CatRoot>>,
+    mut q_window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     let dt = time.delta_secs();
+
+    let Ok(mut window) = q_window.single_mut() else {
+        return;
+    };
+
+    // Initialize float pos if none
+    if config.desktop_pos.is_none() {
+        if let WindowPosition::At(pos) = window.position {
+            config.desktop_pos = Some(pos.as_vec2());
+        } else {
+            config.desktop_pos = Some(Vec2::ZERO);
+        }
+    }
+
     let Ok(mut transform) = q_root.single_mut() else {
         return;
     };
 
     if config.state == CatAiState::Walking {
-        let to_target = config.roam_target - transform.translation;
-        let dist = Vec2::new(to_target.x, to_target.z).length();
+        let current_pos = config.desktop_pos.unwrap();
+        let to_target = config.desktop_target - current_pos;
+        let dist = to_target.length();
 
         // Check if reached destination
-        if dist < 0.15 {
+        if dist < 5.0 {
             config.state = CatAiState::Idle;
             config.state_timer = 3.0;
             return;
         }
 
-        // Smoothly turn towards moving direction (face points along travel direction)
-        let target_angle = to_target.x.atan2(to_target.z);
+        // Determine orientation: if moving right, face right. If left, face left.
+        // We angle it slightly towards the camera (Y-axis rotation) so the face is visible.
+        let target_angle = if to_target.x > 0.0 {
+            std::f32::consts::PI / 3.0 // Facing right and slightly forward
+        } else {
+            -std::f32::consts::PI / 3.0 // Facing left and slightly forward
+        };
+
         let target_rot = Quat::from_rotation_y(target_angle);
         transform.rotation = transform.rotation.slerp(target_rot, 7.0 * dt);
 
-        // Move forward along the direction the cat is facing (face leads the way!)
-        let move_speed = 0.95;
-        let forward = (transform.rotation * Vec3::Z).normalize_or_zero();
-        transform.translation += Vec3::new(forward.x, 0.0, forward.z) * move_speed * dt;
+        // Move window position
+        let move_speed = 100.0; // pixels per second
+        let direction = to_target.normalize_or_zero();
 
-        // Keep within roaming bounds
-        transform.translation.x = transform.translation.x.clamp(ROAM_MIN_X, ROAM_MAX_X);
-        transform.translation.z = transform.translation.z.clamp(ROAM_MIN_Z, ROAM_MAX_Z);
+        let new_pos = current_pos + direction * move_speed * dt;
+        config.desktop_pos = Some(new_pos);
+
+        window.position = WindowPosition::At(new_pos.as_ivec2());
 
         // Advance walk cycle animation phase
         config.walk_phase += dt * 8.5;
 
-        // Look in direction of travel
-        config.look_target = config.roam_target + Vec3::new(0.0, 0.5, 0.0);
+        // Look in direction of travel (in local cat space)
+        config.look_target = transform.translation + Vec3::new(direction.x, 0.5, 3.0);
     } else {
         // When not walking (Idle, Sitting, Sniffing, Sleeping, Petting):
         // Smoothly turn to face the screen/user (towards +Z / camera)
@@ -199,6 +227,11 @@ fn update_roam_movement(
 
         // Reset walk phase smoothly
         config.walk_phase = 0.0;
+
+        // Ensure desktop pos stays in sync with window if user drags it
+        if let WindowPosition::At(pos) = window.position {
+            config.desktop_pos = Some(pos.as_vec2());
+        }
     }
 }
 

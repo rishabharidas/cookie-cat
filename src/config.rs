@@ -116,37 +116,9 @@ pub enum CatAiState {
     Sleeping,
 }
 
-/// Model source type: either procedural stylized model or realistic 3D GLTF model (.glb).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ModelType {
-    /// Realistic 3D mesh loaded from assets/models/cat.glb (exported from Blender)
-    #[default]
-    Gltf,
-    /// Stylized procedural cat built from geometric shapes
-    Procedural,
-}
-
-impl ModelType {
-    pub fn toggle(&self) -> Self {
-        match self {
-            ModelType::Gltf => ModelType::Procedural,
-            ModelType::Procedural => ModelType::Gltf,
-        }
-    }
-
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            ModelType::Gltf => "3D Blender Model (assets/models/cat.glb)",
-            ModelType::Procedural => "Procedural Stylized",
-        }
-    }
-}
-
 /// Global cat settings and live state resource.
 #[derive(Resource)]
 pub struct CatConfig {
-    /// Active 3D model type
-    pub model_type: ModelType,
     /// Current coat color
     pub coat: CoatColor,
     /// Current size scale
@@ -159,8 +131,10 @@ pub struct CatConfig {
     pub petting_timer: f32,
     /// Particle spawn cooldown timer (hearts / zzz)
     pub particle_timer: f32,
-    /// Target roaming position in 3D space
-    pub roam_target: Vec3,
+    /// Target roaming position on screen
+    pub desktop_target: Vec2,
+    /// Current position of the window on screen (stored as f32 for smooth movement)
+    pub desktop_pos: Option<Vec2>,
     /// Walk cycle phase accumulator
     pub walk_phase: f32,
     /// Look target for the head (e.g. mouse cursor in 3D, defaults towards the screen)
@@ -170,14 +144,14 @@ pub struct CatConfig {
 impl Default for CatConfig {
     fn default() -> Self {
         Self {
-            model_type: ModelType::default(),
             coat: CoatColor::default(),
             size: CatSize::default(),
             state: CatAiState::default(),
             state_timer: 3.0,
             petting_timer: 0.0,
             particle_timer: 0.0,
-            roam_target: Vec3::ZERO,
+            desktop_target: Vec2::ZERO,
+            desktop_pos: None,
             walk_phase: 0.0,
             look_target: Vec3::new(0.0, 0.5, 3.0),
         }
