@@ -6,6 +6,7 @@
 
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, WindowPosition};
+use mouse_position::mouse_position::Mouse;
 use crate::cat_model::CatRoot;
 use crate::config::{CatAiState, CatConfig};
 
@@ -17,6 +18,7 @@ impl Plugin for CatAiPlugin {
             .add_systems(
                 Update,
                 (
+                    update_global_mouse,
                     update_cat_ai,
                     update_roam_movement,
                     cat_particles_3d_system,
@@ -24,6 +26,28 @@ impl Plugin for CatAiPlugin {
                 ),
             );
     }
+}
+
+fn update_global_mouse(
+    time: Res<Time>,
+    mut config: ResMut<CatConfig>,
+) {
+    let dt = time.delta_secs();
+
+    // Get mouse position
+    let mut current_pos = config.last_mouse_pos;
+    if let Mouse::Position { x, y } = Mouse::get_mouse_position() {
+        current_pos = Vec2::new(x as f32, y as f32);
+    }
+
+    if current_pos.distance(config.last_mouse_pos) > 5.0 {
+        config.mouse_idle_timer = 0.0;
+        config.last_mouse_pos = current_pos;
+    } else {
+        config.mouse_idle_timer += dt;
+    }
+
+    config.global_mouse_pos = current_pos;
 }
 
 /// Shared 3D mesh and material assets for emotion particles.
@@ -97,8 +121,30 @@ fn update_cat_ai(
         return;
     }
 
+    // Check if mouse has been idle for > 6 seconds
+    if config.mouse_idle_timer > 6.0 {
+        if config.state != CatAiState::SeekingMouse && config.state != CatAiState::Sleeping && config.state != CatAiState::Petting {
+            config.state = CatAiState::SeekingMouse;
+            config.state_timer = 10.0;
+        }
+    } else if config.state == CatAiState::SeekingMouse || config.state == CatAiState::Sleeping {
+        // Mouse moved! Wake up or stop seeking
+        if config.state == CatAiState::Sleeping {
+            println!("Cat woke up!");
+        }
+        config.state = CatAiState::Idle;
+        config.state_timer = 2.5;
+    }
+
     // If sleeping, do not randomly roam
     if config.state == CatAiState::Sleeping {
+        return;
+    }
+
+    // In seeking mode, continuously update target to mouse pos (offset to be centered)
+    if config.state == CatAiState::SeekingMouse {
+        // Center the window (which is 480x340) on the mouse pointer
+        config.desktop_target = config.global_mouse_pos - Vec2::new(240.0, 170.0);
         return;
     }
 
@@ -119,21 +165,31 @@ fn update_cat_ai(
                     }).unwrap_or(Vec2::ZERO)
                 });
 
-                // Move left or right, up or down a bit
-                let dx = ((seed * 1.33).sin() * 400.0) - 200.0;
-                let dy = ((seed * 2.71).cos() * 200.0) - 100.0;
+                // Move left or right, and keep bottom of screen
+                let dx = ((seed * 1.33).sin() * 600.0) - 300.0;
 
-                config.desktop_target = current_pos + Vec2::new(dx, dy);
+                // Assume 1080p height, window height is 340
+                let bottom_y = 1080.0 - 340.0;
+
+                config.desktop_target = current_pos + Vec2::new(dx, 0.0);
 
                 // Roughly clamp to typical screen bounds so it doesn't wander off forever
                 config.desktop_target.x = config.desktop_target.x.clamp(0.0, 1920.0 - 480.0);
-                config.desktop_target.y = config.desktop_target.y.clamp(0.0, 1080.0 - 340.0);
+                config.desktop_target.y = bottom_y;
 
-                config.state = CatAiState::Walking;
-                // Timeout in case it gets stuck
-                config.state_timer = 6.0;
+                let action_seed = (time.elapsed_secs() * 3.1).cos().abs();
+                if action_seed < 0.25 {
+                    config.state = CatAiState::Running;
+                    config.state_timer = 4.0;
+                } else if action_seed < 0.40 {
+                    config.state = CatAiState::Jumping;
+                    config.state_timer = 2.0;
+                } else {
+                    config.state = CatAiState::Walking;
+                    config.state_timer = 6.0;
+                }
             }
-            CatAiState::Walking => {
+            CatAiState::Walking | CatAiState::Running | CatAiState::Jumping => {
                 // Arrived or timed out: pick next idle action
                 let seed = (time.elapsed_secs() * 5.0).sin().abs();
                 if seed < 0.35 {
@@ -182,48 +238,75 @@ fn update_roam_movement(
         return;
     };
 
-    if config.state == CatAiState::Walking {
+    if config.state == CatAiState::Walking || config.state == CatAiState::Running || config.state == CatAiState::Jumping || config.state == CatAiState::SeekingMouse {
         let current_pos = config.desktop_pos.unwrap();
         let to_target = config.desktop_target - current_pos;
         let dist = to_target.length();
 
         // Check if reached destination
         if dist < 5.0 {
-            config.state = CatAiState::Idle;
-            config.state_timer = 3.0;
+            if config.state == CatAiState::SeekingMouse {
+                config.state = CatAiState::Petting;
+                config.petting_timer = 2.0;
+                config.state_timer = 4.0;
+            } else {
+                config.state = CatAiState::Idle;
+                config.state_timer = 3.0;
+            }
             return;
         }
 
-        // Determine orientation: if moving right, face right. If left, face left.
-        // We angle it slightly towards the camera (Y-axis rotation) so the face is visible.
+        // Determine orientation: if moving right, face right (pure 2D side view). If left, face left.
         let target_angle = if to_target.x > 0.0 {
-            std::f32::consts::PI / 3.0 // Facing right and slightly forward
+            std::f32::consts::PI / 2.0 // Facing right directly
         } else {
-            -std::f32::consts::PI / 3.0 // Facing left and slightly forward
+            -std::f32::consts::PI / 2.0 // Facing left directly
         };
 
         let target_rot = Quat::from_rotation_y(target_angle);
         transform.rotation = transform.rotation.slerp(target_rot, 7.0 * dt);
 
-        // Move window position
-        let move_speed = 100.0; // pixels per second
+        // Determine move speed based on state
+        let move_speed = match config.state {
+            CatAiState::Running => 250.0,
+            CatAiState::SeekingMouse => 200.0,
+            _ => 100.0, // Walking or Jumping base horizontal speed
+        };
+
         let direction = to_target.normalize_or_zero();
-
         let new_pos = current_pos + direction * move_speed * dt;
-        config.desktop_pos = Some(new_pos);
 
+        // Jumping animation (vertical window bounce)
+        if config.state == CatAiState::Jumping {
+            // Parabola based on state timer (2.0 down to 0.0)
+            let progress = (2.0 - config.state_timer) / 2.0; // 0 to 1
+            let jump_height = (progress * std::f32::consts::PI).sin() * 80.0;
+            // new_pos.y is modified to bounce up, but target y is at the bottom.
+            // Actually, modifying window position Y for jump can be jarring.
+            // Instead, we just adjust the translation of the cat root.
+            transform.translation.y = jump_height * 0.01; // scale pixel jump to world space roughly
+        } else {
+            // Smoothly return translation to 0
+            transform.translation.y = transform.translation.y * (1.0 - 5.0 * dt);
+        }
+
+        config.desktop_pos = Some(new_pos);
         window.position = WindowPosition::At(new_pos.as_ivec2());
 
-        // Advance walk cycle animation phase
-        config.walk_phase += dt * 8.5;
+        // Advance walk cycle animation phase faster if running
+        let walk_speed = if config.state == CatAiState::Running { 15.0 } else { 8.5 };
+        config.walk_phase += dt * walk_speed;
 
         // Look in direction of travel (in local cat space)
         config.look_target = transform.translation + Vec3::new(direction.x, 0.5, 3.0);
     } else {
-        // When not walking (Idle, Sitting, Sniffing, Sleeping, Petting):
+        // When not moving (Idle, Sitting, Sniffing, Sleeping, Petting):
         // Smoothly turn to face the screen/user (towards +Z / camera)
         let face_screen_rot = Quat::IDENTITY;
         transform.rotation = transform.rotation.slerp(face_screen_rot, 3.5 * dt);
+
+        // Smoothly return Y translation to 0 (in case we stopped jumping)
+        transform.translation.y = transform.translation.y * (1.0 - 5.0 * dt);
 
         // Reset walk phase smoothly
         config.walk_phase = 0.0;

@@ -110,8 +110,11 @@ pub enum CatAiState {
     #[default]
     Idle,
     Walking,
+    Running,
+    Jumping,
     Sniffing,
     Sitting,
+    SeekingMouse,
     Petting,
     Sleeping,
 }
@@ -135,6 +138,12 @@ pub struct CatConfig {
     pub desktop_target: Vec2,
     /// Current position of the window on screen (stored as f32 for smooth movement)
     pub desktop_pos: Option<Vec2>,
+    /// Global OS mouse position
+    pub global_mouse_pos: Vec2,
+    /// Last seen global OS mouse position
+    pub last_mouse_pos: Vec2,
+    /// Mouse idle time counter
+    pub mouse_idle_timer: f32,
     /// Walk cycle phase accumulator
     pub walk_phase: f32,
     /// Look target for the head (e.g. mouse cursor in 3D, defaults towards the screen)
@@ -152,6 +161,9 @@ impl Default for CatConfig {
             particle_timer: 0.0,
             desktop_target: Vec2::ZERO,
             desktop_pos: None,
+            global_mouse_pos: Vec2::ZERO,
+            last_mouse_pos: Vec2::ZERO,
+            mouse_idle_timer: 0.0,
             walk_phase: 0.0,
             look_target: Vec3::new(0.0, 0.5, 3.0),
         }
