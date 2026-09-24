@@ -1,16 +1,16 @@
-//! Window Control & Interaction Module (3D)
+//! Window Control & Interaction Module (2D)
 //!
 //! Handles:
-//! 1. Native OS window dragging with zero latency.
-//! 2. Dynamic click-through hit testing based on 3D cat screen projection.
-//! 3. Interactive petting, coat cycling, resizing, and sleep toggles.
+//! 1. Moving the OS window dynamically based on the AI state.
+//! 2. Basic mouse hit testing and interactions.
+//! 3. Keyboard shortcuts.
 
 use bevy::{
     app::AppExit,
     prelude::*,
-    window::{CursorOptions, PrimaryWindow},
+    window::{CursorOptions, PrimaryWindow, WindowPosition},
 };
-use crate::cat_model::CatRoot;
+use crate::cat_model::CatSprite;
 use crate::cat_physics::SquashPhysics;
 use crate::config::{CatAiState, CatConfig};
 
@@ -19,13 +19,16 @@ pub struct WindowControlPlugin;
 impl Plugin for WindowControlPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CursorScreenPos>()
+            .init_resource::<MonitorSize>()
+            .add_systems(Startup, init_window_position)
             .add_systems(
                 Update,
                 (
                     update_cursor_pos,
-                    update_cursor_hit_test_3d,
-                    handle_mouse_interactions_3d,
+                    update_cursor_hit_test,
+                    handle_mouse_interactions,
                     handle_keyboard_shortcuts,
+                    move_window_with_ai,
                 )
                     .chain(),
             );
@@ -36,8 +39,32 @@ impl Plugin for WindowControlPlugin {
 #[derive(Resource, Default)]
 pub struct CursorScreenPos(pub Option<Vec2>);
 
-/// Hitbox radius in window pixels around the cat's screen position.
-const CAT_SCREEN_RADIUS: f32 = 90.0;
+/// Stores the cached monitor size to clamp to the bottom.
+#[derive(Resource)]
+pub struct MonitorSize {
+    pub width: i32,
+    pub height: i32,
+}
+
+impl Default for MonitorSize {
+    fn default() -> Self {
+        // Fallback size, real size should ideally be fetched from the monitor.
+        Self { width: 1920, height: 1080 }
+    }
+}
+
+fn init_window_position(
+    mut q_window: Query<&mut Window, With<PrimaryWindow>>,
+    _monitor_size: ResMut<MonitorSize>,
+) {
+    if let Ok(mut window) = q_window.single_mut() {
+        // Here we'd ideally get monitor size, but it might not be ready immediately.
+        // We'll set a default starting position near the bottom center.
+        let x = 1920 / 2 - 128;
+        let y = 1080 - 256 - 40; // bottom of screen, roughly accounting for taskbar
+        window.position = WindowPosition::At(IVec2::new(x, y));
+    }
+}
 
 /// Reads cursor position from the window.
 fn update_cursor_pos(
@@ -52,7 +79,7 @@ fn update_cursor_pos(
 }
 
 /// Ensures hit testing is enabled for window interactions and dragging.
-fn update_cursor_hit_test_3d(
+fn update_cursor_hit_test(
     mut q_window: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
     if let Ok(mut cursor_options) = q_window.single_mut() {
@@ -60,42 +87,24 @@ fn update_cursor_hit_test_3d(
     }
 }
 
-/// Handles mouse clicks: left-click to drag/pet, right-click to cycle coat.
-fn handle_mouse_interactions_3d(
+/// Hitbox radius in window pixels.
+const CAT_SCREEN_RADIUS: f32 = 100.0;
+
+/// Handles mouse clicks: left-click to drag/pet.
+fn handle_mouse_interactions(
     mouse_button: Res<ButtonInput<MouseButton>>,
     cursor_pos: Res<CursorScreenPos>,
     mut config: ResMut<CatConfig>,
     mut squash_phys: ResMut<SquashPhysics>,
     mut q_window: Query<&mut Window, With<PrimaryWindow>>,
-    q_cat: Query<&Transform, With<CatRoot>>,
-    q_camera: Query<(&Camera, &GlobalTransform)>,
 ) {
     let Some(mouse_px) = cursor_pos.0 else {
         return;
     };
 
-    let Ok(cat_transform) = q_cat.single() else {
-        return;
-    };
-
-    let Ok((camera, camera_transform)) = q_camera.single() else {
-        return;
-    };
-
-    let cat_3d_pos = cat_transform.translation + Vec3::new(0.0, 0.45, 0.0);
-    let Ok(cat_screen_px) = camera.world_to_viewport(camera_transform, cat_3d_pos) else {
-        return;
-    };
-
-    let effective_radius = CAT_SCREEN_RADIUS * config.size.scale_factor();
-    let is_on_cat = cat_screen_px.distance(mouse_px) <= effective_radius;
-
-    // Update cat look target towards cursor if cursor is near
-    if is_on_cat {
-        let dx = (mouse_px.x - cat_screen_px.x) * 0.012;
-        let dy = (cat_screen_px.y - mouse_px.y) * 0.012; // screen Y is inverted relative to world Y
-        config.look_target = cat_transform.translation + Vec3::new(dx, 0.5 + dy, 2.5);
-    }
+    // Center of 256x256 window
+    let center = Vec2::new(128.0, 128.0);
+    let is_on_cat = mouse_px.distance(center) <= CAT_SCREEN_RADIUS;
 
     if !is_on_cat {
         return;
@@ -107,18 +116,11 @@ fn handle_mouse_interactions_3d(
             window.start_drag_move();
         }
 
-        // Trigger joyful petting reaction & spring jump
         config.state = CatAiState::Petting;
         config.petting_timer = 2.0;
 
         squash_phys.scale_offset.y += 0.35;
         squash_phys.velocity.y += 3.2;
-    }
-
-    // Right Click: Quick cycle coat color
-    if mouse_button.just_pressed(MouseButton::Right) {
-        config.coat = config.coat.next();
-        println!("Switched coat to: {}", config.coat.display_name());
     }
 }
 
@@ -128,25 +130,6 @@ fn handle_keyboard_shortcuts(
     mut config: ResMut<CatConfig>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    // 'M' -> Toggle Model Type (Blender 3D Model <-> Procedural)
-    if keyboard.just_pressed(KeyCode::KeyM) {
-        config.model_type = config.model_type.toggle();
-        println!("Cat model switched to: {}", config.model_type.display_name());
-    }
-
-    // 'C' -> Cycle Coat Color (Biscuit -> White -> Grey)
-    if keyboard.just_pressed(KeyCode::KeyC) {
-        config.coat = config.coat.next();
-        println!("Coat changed to: {}", config.coat.display_name());
-    }
-
-    // 'S' -> Cycle Size (Small -> Normal -> Large -> ExtraLarge)
-    if keyboard.just_pressed(KeyCode::KeyS) {
-        config.size = config.size.next();
-        println!("Size changed to: {}", config.size.display_name());
-    }
-
-    // 'Space' -> Toggle Sleep / Awake
     if keyboard.just_pressed(KeyCode::Space) {
         config.state = if config.state == CatAiState::Sleeping {
             CatAiState::Idle
@@ -156,20 +139,49 @@ fn handle_keyboard_shortcuts(
         println!("Cat state: {:?}", config.state);
     }
 
-    // 'H' -> Print Help / Controls
-    if keyboard.just_pressed(KeyCode::KeyH) {
-        println!("=== Desktop Cat Controls ===");
-        println!("Left Click + Drag: Move window");
-        println!("Left Click: Pet cat & bounce with hearts");
-        println!("Right Click or 'C': Cycle coat color");
-        println!("'M': Toggle 3D Blender Model (cat.glb) / Procedural");
-        println!("'S': Cycle size (Small / Normal / Large / ExtraLarge)");
-        println!("Space: Sleep / Awake toggle");
-        println!("'Q' or Esc: Quit");
-    }
-
-    // 'Escape' or 'Q' -> Quit Application
     if keyboard.just_pressed(KeyCode::Escape) || keyboard.just_pressed(KeyCode::KeyQ) {
         exit.write(AppExit::Success);
+    }
+}
+
+/// Moves the actual OS window left/right when the cat AI state is Walking.
+fn move_window_with_ai(
+    time: Res<Time>,
+    config: Res<CatConfig>,
+    mut q_window: Query<&mut Window, With<PrimaryWindow>>,
+    mut q_sprite: Query<&mut Sprite, With<CatSprite>>,
+    mut fraction_acc: Local<f32>,
+) {
+    let dt = time.delta_secs();
+
+    let Ok(mut window) = q_window.single_mut() else {
+        return;
+    };
+
+    if config.state == CatAiState::Walking {
+        // Check which direction to walk based on roam_target.x
+        let direction = if config.roam_target.x > 0.0 { 1.0 } else { -1.0 };
+
+        let move_speed = 100.0; // pixels per second
+        let dx = direction * move_speed * dt;
+
+        *fraction_acc += dx;
+        let move_pixels = fraction_acc.trunc() as i32;
+        *fraction_acc -= move_pixels as f32;
+
+        if let WindowPosition::At(mut pos) = window.position {
+            pos.x += move_pixels;
+            window.position = WindowPosition::At(pos);
+        } else if let WindowPosition::Automatic = window.position {
+            // fallback if it wasn't At
+             window.position = WindowPosition::At(IVec2::new(1920/2, 1080 - 256 - 40));
+        }
+
+        // Flip sprite based on direction
+        if let Ok(mut sprite) = q_sprite.single_mut() {
+            sprite.flip_x = direction > 0.0;
+        }
+    } else {
+        *fraction_acc = 0.0;
     }
 }
