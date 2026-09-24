@@ -11,7 +11,8 @@ mod cat_physics;
 mod cat_ai;
 mod window_control;
 
-use bevy::camera::{ClearColorConfig, OrthographicProjection, ScalingMode};
+use bevy::camera::ClearColorConfig;
+// use bevy::core_pipeline::core_2d::Camera2d;
 use bevy::prelude::*;
 use bevy::window::{CompositeAlphaMode, WindowLevel};
 
@@ -37,6 +38,7 @@ fn main() {
                 composite_alpha_mode: CompositeAlphaMode::Auto,
                 resolution: (480, 340).into(),
                 resizable: false,
+                position: bevy::window::WindowPosition::At(bevy::math::IVec2::new(1920 / 2 - 240, 1080 - 340)),
                 ..default()
             }),
             ..default()
@@ -64,16 +66,11 @@ fn main() {
 fn setup_3d_scene(mut commands: Commands) {
     // 3D Camera with transparent clear color
     commands.spawn((
-        Camera3d::default(),
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical { viewport_height: 5.0 },
-            ..OrthographicProjection::default_3d()
-        }),
-        Camera {
+        Camera2d, Camera {
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
-        Transform::from_xyz(0.0, 3.2, 4.6).looking_at(Vec3::new(0.0, 0.4, 0.0), Vec3::Y),
+        Transform::default(),
     ));
 
     // Key Light (warm sunlight from upper right)
