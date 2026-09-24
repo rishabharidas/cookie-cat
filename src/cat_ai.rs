@@ -169,7 +169,7 @@ fn update_cat_ai(
                 let dx = ((seed * 1.33).sin() * 600.0) - 300.0;
 
                 // Assume 1080p height, window height is 340
-                let bottom_y = 1080.0 - 340.0;
+                let bottom_y = 1080.0 - 340.0; // FIXME: get real screen bounds
 
                 config.desktop_target = current_pos + Vec2::new(dx, 0.0);
 

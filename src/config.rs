@@ -76,10 +76,10 @@ impl CatSize {
     /// Returns the uniform scale factor for rendering.
     pub fn scale_factor(&self) -> f32 {
         match self {
-            CatSize::Small => 0.80,
-            CatSize::Normal => 1.00,
-            CatSize::Large => 1.25,
-            CatSize::ExtraLarge => 1.50,
+            CatSize::Small => 0.35,
+            CatSize::Normal => 0.45,
+            CatSize::Large => 0.55,
+            CatSize::ExtraLarge => 0.70,
         }
     }
 

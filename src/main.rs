@@ -11,7 +11,7 @@ mod cat_physics;
 mod cat_ai;
 mod window_control;
 
-use bevy::camera::ClearColorConfig;
+use bevy::camera::{ClearColorConfig, OrthographicProjection, ScalingMode};
 use bevy::prelude::*;
 use bevy::window::{CompositeAlphaMode, WindowLevel};
 
@@ -65,6 +65,10 @@ fn setup_3d_scene(mut commands: Commands) {
     // 3D Camera with transparent clear color
     commands.spawn((
         Camera3d::default(),
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::FixedVertical { viewport_height: 5.0 },
+            ..OrthographicProjection::default_3d()
+        }),
         Camera {
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
