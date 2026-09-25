@@ -29,11 +29,11 @@ impl Plugin for CatAiPlugin {
 
 
 
-/// Roaming area limits in 3D world space.
-const ROAM_MIN_X: f32 = -1.6;
-const ROAM_MAX_X: f32 = 1.6;
-const ROAM_MIN_Z: f32 = -0.6;
-const ROAM_MAX_Z: f32 = 0.6;
+/// Roaming area limits in 2D screen space (pixels).
+const ROAM_MIN_X: f32 = -200.0;
+const ROAM_MAX_X: f32 = 200.0;
+const ROAM_MIN_Y: f32 = -150.0;
+const ROAM_MAX_Y: f32 = -50.0;
 
 /// High-level AI state machine: decides when to walk, sit, sniff, or nap.
 fn update_cat_ai(
@@ -71,12 +71,12 @@ fn update_cat_ai(
 
         match config.state {
             CatAiState::Idle | CatAiState::Sniffing | CatAiState::Sitting => {
-                // Generate a pseudo-random new destination
+                // Generate a pseudo-random new destination in 2D space
                 let seed = time.elapsed_secs();
                 let rand_x = ((seed * 1.33).sin() * 0.5 + 0.5) * (ROAM_MAX_X - ROAM_MIN_X) + ROAM_MIN_X;
-                let rand_z = ((seed * 2.71).cos() * 0.5 + 0.5) * (ROAM_MAX_Z - ROAM_MIN_Z) + ROAM_MIN_Z;
+                let rand_y = ((seed * 2.71).cos() * 0.5 + 0.5) * (ROAM_MAX_Y - ROAM_MIN_Y) + ROAM_MIN_Y;
 
-                config.roam_target = Vec3::new(rand_x, 0.0, rand_z);
+                config.roam_target = Vec3::new(rand_x, rand_y, 0.0);
                 config.state = CatAiState::Walking;
                 // Timeout in case it gets stuck
                 config.state_timer = 6.0;
@@ -117,34 +117,29 @@ fn update_roam_movement(
 
     if config.state == CatAiState::Walking {
         let to_target = config.roam_target - transform.translation;
-        let dist = Vec2::new(to_target.x, to_target.z).length();
+        let dist = Vec2::new(to_target.x, to_target.y).length();
 
         // Check if reached destination
-        if dist < 0.15 {
+        if dist < 5.0 {
             config.state = CatAiState::Idle;
             config.state_timer = 3.0;
             return;
         }
 
-        // Smoothly turn towards moving direction (face points along travel direction)
-        let target_angle = to_target.x.atan2(to_target.z);
-        let _target_rot = Quat::from_rotation_y(target_angle);
-        // 2D Sprite rotation handled via flip_x
-
-        // Move forward along the direction the cat is facing (face leads the way!)
-        let move_speed = 0.95;
-        let forward = (transform.rotation * Vec3::Z).normalize_or_zero();
-        transform.translation += Vec3::new(forward.x, 0.0, forward.z) * move_speed * dt;
+        // Move towards target in 2D space
+        let move_speed = 60.0;
+        let direction = Vec3::new(to_target.x, to_target.y, 0.0).normalize_or_zero();
+        transform.translation += direction * move_speed * dt;
 
         // Keep within roaming bounds
         transform.translation.x = transform.translation.x.clamp(ROAM_MIN_X, ROAM_MAX_X);
-        transform.translation.z = transform.translation.z.clamp(ROAM_MIN_Z, ROAM_MAX_Z);
+        transform.translation.y = transform.translation.y.clamp(ROAM_MIN_Y, ROAM_MAX_Y);
 
         // Advance walk cycle animation phase
         config.walk_phase += dt * 8.5;
 
-        // Look in direction of travel
-        config.look_target = config.roam_target + Vec3::new(0.0, 0.5, 0.0);
+        // Look in direction of travel (using X for flip_x)
+        config.look_target = config.roam_target;
     } else {
         // When not walking (Idle, Sitting, Sniffing, Sleeping, Petting):
         // Smoothly turn to face the screen/user (towards +Z / camera)

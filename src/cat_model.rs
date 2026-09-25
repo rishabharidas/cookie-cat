@@ -48,23 +48,23 @@ fn setup_cat_model(
         grey: grey_handle.clone(),
     });
 
-    // Make it much larger so it's visible. The image provided is quite small inside the texture possibly,
-    // or maybe the base scaling was too small. We use a base scale of 4.0.
+    // Adjust scale to fit the window appropriately for a 2D sprite
+    // Base scale is smaller since 1 unit = 1 pixel. Image is 370x270.
     commands
         .spawn((
             CatRoot,
             Sprite::from_image(active_texture),
-            Transform::from_scale(Vec3::splat(config.size.scale_factor() * 4.0)),
+            Transform::from_scale(Vec3::splat(config.size.scale_factor() * 0.4)),
         ));
 }
 
 fn update_cat_sprite_flip(
     config: Res<CatConfig>,
     cat_sprite: Option<Res<CatSprite>>,
-    mut q_sprite: Query<&mut Sprite, With<CatRoot>>,
+    mut q_sprite: Query<(&mut Sprite, &Transform), With<CatRoot>>,
 ) {
     let Some(sprites) = cat_sprite else { return };
-    for mut sprite in &mut q_sprite {
+    for (mut sprite, transform) in &mut q_sprite {
         let expected_texture = match config.coat {
             CoatColor::Biscuit => &sprites.biscuit,
             CoatColor::White => &sprites.white,
@@ -76,7 +76,7 @@ fn update_cat_sprite_flip(
         }
 
         // Face direction based on look_target X relative to current pos
-        if config.look_target.x < 0.0 {
+        if config.look_target.x < transform.translation.x {
             sprite.flip_x = true;
         } else {
             sprite.flip_x = false;
