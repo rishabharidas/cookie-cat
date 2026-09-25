@@ -1,14 +1,11 @@
 //! Physics & Secondary Motion Systems
 //!
 //! Implements:
-//! 1. Spring-damper physics for multi-joint tail sway and inertial lag.
-//! 2. Ear twitch dynamics.
-//! 3. Procedural 4-beat trot walk cycle with paw stepping and torso bobbing.
-//! 4. Squash-and-stretch dynamic bounciness for jumps, landings, and breathing.
-//! 5. Head look-at target tracking.
+//! 1. Squash-and-stretch dynamic bounciness for jumps and breathing.
 
 use bevy::prelude::*;
 use crate::config::{CatAiState, CatConfig};
+use crate::cat_model::CatRoot;
 
 pub struct CatPhysicsPlugin;
 
@@ -40,16 +37,16 @@ impl Default for SquashPhysics {
     }
 }
 
-/// Procedural 4-beat walk cycle: animates paw positions and torso bobbing.
+/// Dynamic squash-and-stretch: plush bouncy deformation for jumps and landings.
 fn update_squash_and_stretch(
     time: Res<Time>,
     config: Res<CatConfig>,
     mut squash_phys: ResMut<SquashPhysics>,
-    mut q_squash: Query<&mut Transform, With<crate::cat_model::CatRoot>>,
+    mut q_squash: Query<&mut Transform, With<CatRoot>>,
 ) {
     let dt = time.delta_secs();
     let elapsed = time.elapsed_secs();
-    let base_scale = config.size.scale_factor();
+    let base_scale = config.size.scale_factor() * 4.0; // Same as base scale in model
 
     let Ok(mut transform) = q_squash.single_mut() else {
         return;
@@ -69,7 +66,7 @@ fn update_squash_and_stretch(
 
     let force = -squash_phys.scale_offset * spring_stiffness - squash_phys.velocity * damping;
     squash_phys.velocity += force * dt;
-        let vel = squash_phys.velocity;
+    let vel = squash_phys.velocity;
     squash_phys.scale_offset += vel * dt;
 
     let dynamic_y = 1.0 + breath + squash_phys.scale_offset.y;
@@ -77,10 +74,8 @@ fn update_squash_and_stretch(
     let dynamic_xz = 1.0 - (breath * 0.5) - (squash_phys.scale_offset.y * 0.45);
 
     transform.scale = Vec3::new(
-        base_scale * dynamic_xz * 0.4,
-        base_scale * dynamic_y * 0.4,
-        base_scale * dynamic_xz * 0.4,
+        base_scale * dynamic_xz,
+        base_scale * dynamic_y,
+        base_scale * dynamic_xz,
     );
 }
-
-

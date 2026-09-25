@@ -17,32 +17,6 @@ pub enum CoatColor {
 }
 
 impl CoatColor {
-    /// Returns the primary body PBR color.
-    pub fn body_color(&self) -> Color {
-        match self {
-            // Warm cream tone matching drifty.so
-            CoatColor::Biscuit => Color::srgb(0.93, 0.91, 0.85),
-            // Clean soft white with subtle warmth
-            CoatColor::White => Color::srgb(0.97, 0.97, 0.98),
-            // Soft slate grey / British Shorthair
-            CoatColor::Grey => Color::srgb(0.58, 0.60, 0.64),
-        }
-    }
-
-    /// Returns the inner ear accent color.
-    pub fn inner_ear_color(&self) -> Color {
-        match self {
-            CoatColor::Biscuit => Color::srgb(0.96, 0.78, 0.78),
-            CoatColor::White => Color::srgb(0.98, 0.82, 0.84),
-            CoatColor::Grey => Color::srgb(0.85, 0.72, 0.76),
-        }
-    }
-
-    /// Returns the cute nose color.
-    pub fn nose_color(&self) -> Color {
-        Color::srgb(0.92, 0.55, 0.62)
-    }
-
     /// User-friendly display name.
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -158,7 +132,7 @@ pub struct CatConfig {
     /// Timer for petting bounce reaction
     pub petting_timer: f32,
     /// Particle spawn cooldown timer (hearts / zzz)
-    pub particle_timer: f32,
+
     /// Target roaming position in 3D space
     pub roam_target: Vec3,
     /// Walk cycle phase accumulator
@@ -176,7 +150,7 @@ impl Default for CatConfig {
             state: CatAiState::default(),
             state_timer: 3.0,
             petting_timer: 0.0,
-            particle_timer: 0.0,
+
             roam_target: Vec3::ZERO,
             walk_phase: 0.0,
             look_target: Vec3::new(0.0, 0.5, 3.0),

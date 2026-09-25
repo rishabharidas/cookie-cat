@@ -12,8 +12,7 @@ pub struct CatAiPlugin;
 
 impl Plugin for CatAiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_particle_assets)
-            .add_systems(
+        app.add_systems(
                 Update,
                 (
                     update_cat_ai,
@@ -25,55 +24,10 @@ impl Plugin for CatAiPlugin {
     }
 }
 
-/// Shared 3D mesh and material assets for emotion particles.
-#[derive(Resource)]
-pub struct ParticleAssets {
-    pub quad_mesh: Handle<Mesh>,
-    pub heart_material: Handle<StandardMaterial>,
-    pub zzz_material: Handle<StandardMaterial>,
-}
 
-fn setup_particle_assets(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let quad_mesh = meshes.add(Rectangle::new(0.28, 0.28));
 
-    let heart_tex = asset_server.load("cat/heart.png");
-    let heart_material = materials.add(StandardMaterial {
-        base_color_texture: Some(heart_tex),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        cull_mode: None,
-        ..default()
-    });
 
-    let zzz_tex = asset_server.load("cat/zzz.png");
-    let zzz_material = materials.add(StandardMaterial {
-        base_color_texture: Some(zzz_tex),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        cull_mode: None,
-        ..default()
-    });
 
-    commands.insert_resource(ParticleAssets {
-        quad_mesh,
-        heart_material,
-        zzz_material,
-    });
-}
-
-/// Marker for 3D billboard emotion particles (hearts, zzz).
-#[derive(Component)]
-pub struct EmotionParticle3d {
-    pub lifetime: f32,
-    pub max_lifetime: f32,
-    pub velocity: Vec3,
-    pub initial_scale: Vec3,
-}
 
 /// Roaming area limits in 3D world space.
 const ROAM_MIN_X: f32 = -1.6;
@@ -199,100 +153,5 @@ fn update_roam_movement(
 
         // Reset walk phase smoothly
         config.walk_phase = 0.0;
-    }
-}
-
-/// Spawns 3D floating hearts and zzz particles using billboard quads in 3D.
-fn cat_particles_3d_system(
-    mut commands: Commands,
-    particle_assets: Option<Res<ParticleAssets>>,
-    time: Res<Time>,
-    mut config: ResMut<CatConfig>,
-    q_root: Query<&Transform, With<CatRoot>>,
-) {
-    let Some(assets) = particle_assets else {
-        return;
-    };
-
-    config.particle_timer -= time.delta_secs();
-
-    let cat_pos = q_root
-        .single()
-        .map(|t| t.translation)
-        .unwrap_or(Vec3::ZERO);
-
-    match config.state {
-        CatAiState::Petting => {
-            if config.particle_timer <= 0.0 {
-                config.particle_timer = 0.35;
-
-                let offset_x = (time.elapsed_secs() * 6.0).sin() * 0.25;
-                let spawn_pos = cat_pos + Vec3::new(offset_x, 1.15, 0.25);
-
-                commands.spawn((
-                    EmotionParticle3d {
-                        lifetime: 1.3,
-                        max_lifetime: 1.3,
-                        velocity: Vec3::new(0.08, 0.75, 0.0),
-                        initial_scale: Vec3::splat(1.0),
-                    },
-                    Mesh3d(assets.quad_mesh.clone()),
-                    MeshMaterial3d(assets.heart_material.clone()),
-                    Transform::from_translation(spawn_pos),
-                ));
-            }
-        }
-        CatAiState::Sleeping => {
-            if config.particle_timer <= 0.0 {
-                config.particle_timer = 0.9;
-
-                let offset_x = 0.2 + (time.elapsed_secs() * 2.5).sin() * 0.15;
-                let spawn_pos = cat_pos + Vec3::new(offset_x, 0.85, 0.20);
-
-                commands.spawn((
-                    EmotionParticle3d {
-                        lifetime: 1.6,
-                        max_lifetime: 1.6,
-                        velocity: Vec3::new(0.10, 0.50, 0.0),
-                        initial_scale: Vec3::splat(0.9),
-                    },
-                    Mesh3d(assets.quad_mesh.clone()),
-                    MeshMaterial3d(assets.zzz_material.clone()),
-                    Transform::from_translation(spawn_pos),
-                ));
-            }
-        }
-        _ => {
-            if config.particle_timer < 0.0 {
-                config.particle_timer = 0.0;
-            }
-        }
-    }
-}
-
-/// Updates 3D emotion particles: floating upward, facing camera, and shrinking on expiry.
-fn update_particles_3d(
-    mut commands: Commands,
-    time: Res<Time>,
-    q_camera: Query<&Transform, (With<Camera3d>, Without<EmotionParticle3d>)>,
-    mut q_particles: Query<(Entity, &mut EmotionParticle3d, &mut Transform)>,
-) {
-    let dt = time.delta_secs();
-    let camera_rot = q_camera.single().map(|t| t.rotation).unwrap_or(Quat::IDENTITY);
-
-    for (entity, mut particle, mut transform) in &mut q_particles {
-        particle.lifetime -= dt;
-        if particle.lifetime <= 0.0 {
-            commands.entity(entity).despawn();
-            continue;
-        }
-
-        transform.translation += particle.velocity * dt;
-        // Billboard facing camera
-        transform.rotation = camera_rot;
-
-        // Shrink smoothly as lifetime expires
-        let progress = (particle.lifetime / particle.max_lifetime).clamp(0.0, 1.0);
-        transform.scale = particle.initial_scale * (0.35 + 0.65 * progress);
     }
 }
