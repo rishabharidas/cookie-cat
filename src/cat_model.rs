@@ -52,7 +52,6 @@ fn setup_cat_model(
     // or maybe the base scaling was too small. We use a base scale of 4.0.
     commands
         .spawn((
-            crate::cat_physics::SquashPhysics::default(),
             CatRoot,
             Sprite::from_image(active_texture),
             Transform::from_scale(Vec3::splat(config.size.scale_factor() * 4.0)),
