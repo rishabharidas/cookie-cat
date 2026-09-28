@@ -1,10 +1,11 @@
 //! 3D Cat Model System
 //!
-//! Supports:
-//! 1. Loading realistic 3D models exported from Blender (`assets/models/cat.glb`).
-//! 2. Procedural stylized chibi cat fallback.
-//! 3. Dynamic runtime switching between models (press 'M').
-//! 4. Automatic screen-facing orientation and head tracking.
+//! Procedural stylized chibi cat model with:
+//! 1. Expressive articulated head with blinking eyes, twitching whiskers, and reactive ears.
+//! 2. 4 articulated paws for grounded 4-beat locomotion.
+//! 3. 3-segment spring-damper physics tail.
+//! 4. Dynamic squash-and-stretch bone for breathing, sitting posture, and impact absorption.
+//! 5. Runtime PBR material recoloring for coat variations.
 
 use bevy::prelude::*;
 use crate::config::{CatConfig, CoatColor};
@@ -22,13 +23,29 @@ impl Plugin for CatModelPlugin {
 #[derive(Component)]
 pub struct CatRoot;
 
-/// Bone for squash-and-stretch dynamic bounciness.
+/// Bone for squash-and-stretch dynamic bounciness and posture crouch.
 #[derive(Component)]
 pub struct CatSquash;
 
-/// Cat head bone (rotates to look around and follow cursor).
+/// Cat head bone (rotates to look around, tilt curiously, and follow cursor).
 #[derive(Component)]
 pub struct CatHead;
+
+/// Marker for cat eyes (for natural blinking and sleepy closed eyes).
+#[derive(Component)]
+pub struct CatEye {
+    #[allow(dead_code)]
+    pub is_left: bool,
+    pub rest_scale: Vec3,
+}
+
+/// Marker for cat whiskers (for sniffing and curiosity vibrations).
+#[derive(Component)]
+pub struct CatWhisker {
+    #[allow(dead_code)]
+    pub is_left: bool,
+    pub base_rotation: Quat,
+}
 
 /// Marker for cat ears.
 #[derive(Component)]
@@ -76,7 +93,7 @@ pub struct CatMaterials {
     pub whisker_material: Handle<StandardMaterial>,
 }
 
-/// Spawns the root and initial cat model.
+/// Spawns the root and initial cat hierarchy.
 fn setup_cat_model(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -84,20 +101,20 @@ fn setup_cat_model(
 ) {
     // 1. Create shared PBR materials
     let body_material = materials.add(StandardMaterial {
-        base_color: config.coat.body_color(),
-        perceptual_roughness: 0.60,
+        base_color: config.settings.coat.body_color(),
+        perceptual_roughness: 0.65,
         reflectance: 0.20,
         ..default()
     });
 
     let inner_ear_material = materials.add(StandardMaterial {
-        base_color: config.coat.inner_ear_color(),
+        base_color: config.settings.coat.inner_ear_color(),
         perceptual_roughness: 0.70,
         ..default()
     });
 
     let nose_material = materials.add(StandardMaterial {
-        base_color: config.coat.nose_color(),
+        base_color: config.settings.coat.nose_color(),
         perceptual_roughness: 0.40,
         ..default()
     });
@@ -143,7 +160,7 @@ fn setup_cat_model(
             root.spawn((
                 CatSquash,
                 Transform::from_translation(Vec3::new(0.0, 0.55, 0.0))
-                    .with_scale(Vec3::splat(config.size.scale_factor())),
+                    .with_scale(Vec3::splat(config.settings.size.scale_factor())),
                 Visibility::default(),
             ));
         });
@@ -241,6 +258,7 @@ fn spawn_procedural_model(
 
                     // Left Eye
                     head.spawn((
+                        CatEye { is_left: true, rest_scale: Vec3::splat(1.0) },
                         Mesh3d(eye_mesh.clone()),
                         MeshMaterial3d(materials.eye_material.clone()),
                         Transform::from_xyz(-0.15, 0.04, 0.35),
@@ -256,6 +274,7 @@ fn spawn_procedural_model(
 
                     // Right Eye
                     head.spawn((
+                        CatEye { is_left: false, rest_scale: Vec3::splat(1.0) },
                         Mesh3d(eye_mesh.clone()),
                         MeshMaterial3d(materials.eye_material.clone()),
                         Transform::from_xyz(0.15, 0.04, 0.35),
@@ -280,11 +299,13 @@ fn spawn_procedural_model(
                     let whisker_rot_l1 = Quat::from_euler(EulerRot::YXZ, -0.2, 0.0, 1.45);
                     let whisker_rot_l2 = Quat::from_euler(EulerRot::YXZ, -0.2, 0.0, 1.70);
                     head.spawn((
+                        CatWhisker { is_left: true, base_rotation: whisker_rot_l1 },
                         Mesh3d(whisker_mesh.clone()),
                         MeshMaterial3d(materials.whisker_material.clone()),
                         Transform::from_xyz(-0.20, -0.04, 0.30).with_rotation(whisker_rot_l1),
                     ));
                     head.spawn((
+                        CatWhisker { is_left: true, base_rotation: whisker_rot_l2 },
                         Mesh3d(whisker_mesh.clone()),
                         MeshMaterial3d(materials.whisker_material.clone()),
                         Transform::from_xyz(-0.20, -0.08, 0.30).with_rotation(whisker_rot_l2),
@@ -293,11 +314,13 @@ fn spawn_procedural_model(
                     let whisker_rot_r1 = Quat::from_euler(EulerRot::YXZ, 0.2, 0.0, -1.45);
                     let whisker_rot_r2 = Quat::from_euler(EulerRot::YXZ, 0.2, 0.0, -1.70);
                     head.spawn((
+                        CatWhisker { is_left: false, base_rotation: whisker_rot_r1 },
                         Mesh3d(whisker_mesh.clone()),
                         MeshMaterial3d(materials.whisker_material.clone()),
                         Transform::from_xyz(0.20, -0.04, 0.30).with_rotation(whisker_rot_r1),
                     ));
                     head.spawn((
+                        CatWhisker { is_left: false, base_rotation: whisker_rot_r2 },
                         Mesh3d(whisker_mesh.clone()),
                         MeshMaterial3d(materials.whisker_material.clone()),
                         Transform::from_xyz(0.20, -0.08, 0.30).with_rotation(whisker_rot_r2),
@@ -410,15 +433,15 @@ fn update_cat_materials(
         return;
     };
 
-    if last_coat.is_none() || *last_coat != Some(config.coat) {
-        *last_coat = Some(config.coat);
+    if last_coat.is_none() || *last_coat != Some(config.settings.coat) {
+        *last_coat = Some(config.settings.coat);
 
         if let Some(mut mat) = materials.get_mut(&cat_mats.body_material) {
-            mat.base_color = config.coat.body_color();
+            mat.base_color = config.settings.coat.body_color();
         }
 
         if let Some(mut mat) = materials.get_mut(&cat_mats.inner_ear_material) {
-            mat.base_color = config.coat.inner_ear_color();
+            mat.base_color = config.settings.coat.inner_ear_color();
         }
     }
 }

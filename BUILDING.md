@@ -128,11 +128,13 @@ and publishes them directly to your GitHub Releases page!
 
 | Action | Control | Description |
 |---|---|---|
-| **Drag & Reposition** | **Left Click + Drag** | Native OS window drag anywhere on the screen |
+| **System Tray Menu** | **Status Bar Icon Click** | Open Dashboard, Show/Hide Cat, Pause/Resume, Exit |
+| **Settings Dashboard** | **`D`** or Tray Menu | Open lightweight configuration & behavior control panel |
+| **Drag & Drop (Gravity)** | **Left Click + Drag** | Drag anywhere; releasing in air applies gravity with bouncy landing |
 | **Pet the Cat** | **Left Click** | Bouncing happy reaction with floating `❤️` hearts |
-| **Toggle 3D Model** | **`M`** | Switch between Blender 3D Model (`cat.glb`) and Stylized Procedural |
-| **Cycle Coat** | **Right Click** or **`C`** | Cycle: Biscuit -> White -> Grey |
-| **Cycle Size** | **`S`** | Cycle: Small (80%) -> Normal (100%) -> Large (130%) -> Extra Large (160%) |
-| **Sleep / Nap** | **`Space`** | Toggles nap mode with floating `z Z Z` particles |
+| **Cycle Coat** | **Right Click** or **`C`** | Cycle: Biscuit -> White -> Grey (persisted) |
+| **Cycle Size** | **`S`** | Cycle: Small (80%) -> Normal (100%) -> Large (125%) -> Extra Large (150%) |
+| **Pause / Resume** | **`P`** or Tray Menu | Freeze/resume autonomous roaming & behavior |
+| **Sleep / Nap** | **`Space`** | Toggles nap mode with floating `z Z Z` particles and closed eyes |
 | **Help** | **`H`** | Print keyboard shortcuts and controls in terminal |
-| **Quit** | **`Escape`** or **`Q`** | Close widget |
+| **Quit** | **`Escape`**, **`Q`**, or Tray Exit | Completely terminates application |
