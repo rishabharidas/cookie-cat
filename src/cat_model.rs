@@ -6,17 +6,15 @@
 //! 3. Dynamic runtime switching between models (press 'M').
 //! 4. Automatic screen-facing orientation and head tracking.
 
-use std::f32::consts::PI;
-use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
-use crate::config::{CatConfig, CoatColor, ModelType};
+use crate::config::{CatConfig, CoatColor};
 
 pub struct CatModelPlugin;
 
 impl Plugin for CatModelPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_cat_model)
-            .add_systems(Update, (sync_cat_model, update_cat_materials, attach_head_to_gltf));
+            .add_systems(Update, (sync_cat_model, update_cat_materials));
     }
 }
 
@@ -147,30 +145,6 @@ fn setup_cat_model(
                 Transform::from_translation(Vec3::new(0.0, 0.55, 0.0))
                     .with_scale(Vec3::splat(config.size.scale_factor())),
                 Visibility::default(),
-            ));
-        });
-}
-
-/// Spawns the 3D model exported from Blender (cat.glb).
-fn spawn_gltf_model(parent: &mut ChildSpawnerCommands, asset_server: &AssetServer) {
-    let scene_handle: Handle<WorldAsset> =
-        asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/cat.glb"));
-
-    parent
-        .spawn((
-            ActiveCatModelRoot,
-            // Rotate 180 degrees around Y so the model faces the camera/screen (+Z)
-            Transform::from_xyz(0.0, -0.45, 0.0).with_rotation(Quat::from_rotation_y(PI)),
-            Visibility::default(),
-        ))
-        .with_children(|gltf_root| {
-            // Center and scale assets/models/cat.glb (which has ~30 unit dimensions)
-            // Model bounding box is centered at X: ~14.7, Z: ~-14.2
-            let scale = 0.042;
-            gltf_root.spawn((
-                WorldAssetRoot(scene_handle),
-                Transform::from_translation(Vec3::new(-14.7 * scale, 0.0, 14.2 * scale))
-                    .with_scale(Vec3::splat(scale)),
             ));
         });
 }
@@ -398,54 +372,31 @@ fn spawn_procedural_model(
         });
 }
 
-/// Keeps active model in sync with config.model_type.
+/// Ensures the procedural model is spawned.
 fn sync_cat_model(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     cat_materials: Option<Res<CatMaterials>>,
-    config: Res<CatConfig>,
-    mut last_model_type: Local<Option<ModelType>>,
+    mut spawned: Local<bool>,
     q_squash: Query<Entity, With<CatSquash>>,
-    q_active_models: Query<Entity, With<ActiveCatModelRoot>>,
 ) {
-    if *last_model_type == Some(config.model_type) {
+    if *spawned {
         return;
     }
-    *last_model_type = Some(config.model_type);
 
     let Ok(squash_entity) = q_squash.single() else {
         return;
     };
-
-    // Despawn previous model children
-    for model_entity in &q_active_models {
-        commands.entity(model_entity).despawn();
-    }
 
     let Some(materials) = cat_materials else {
         return;
     };
 
     commands.entity(squash_entity).with_children(|squash| {
-        match config.model_type {
-            ModelType::Gltf => spawn_gltf_model(squash, &asset_server),
-            ModelType::Procedural => spawn_procedural_model(squash, &mut meshes, &materials),
-        }
+        spawn_procedural_model(squash, &mut meshes, &materials);
     });
-}
 
-/// Automatically attaches CatHead component to any node with 'head' in its name from a loaded Blender armature.
-fn attach_head_to_gltf(
-    mut commands: Commands,
-    q_nodes: Query<(Entity, &Name), (Without<CatHead>, Added<Name>)>,
-) {
-    for (entity, name) in &q_nodes {
-        let name_str = name.as_str().to_lowercase();
-        if name_str.contains("head") {
-            commands.entity(entity).insert(CatHead);
-        }
-    }
+    *spawned = true;
 }
 
 /// Updates PBR material colors when coat color changes.
