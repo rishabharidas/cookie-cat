@@ -103,7 +103,8 @@ fn main() {
         })
         .init_resource::<config::CatConfig>()
         // 3D Scene setup (Camera and lights)
-        .add_systems(Startup, setup_3d_scene)
+        .add_systems(Startup, (setup_3d_scene, ensure_platform_accessory))
+        .add_systems(Update, ensure_platform_accessory)
         // Core Plugins
         .add_plugins(CatModelPlugin)
         .add_plugins(CatPhysicsPlugin)
@@ -147,4 +148,12 @@ fn setup_3d_scene(mut commands: Commands) {
         },
         Transform::from_xyz(-4.0, 4.0, -3.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+}
+
+/// Enforces background accessory activation policy and suppresses top menu bar.
+fn ensure_platform_accessory(mut frame_count: Local<u32>) {
+    if *frame_count < 20 {
+        *frame_count += 1;
+        platform::configure_as_background_accessory();
+    }
 }

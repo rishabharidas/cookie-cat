@@ -66,6 +66,7 @@ fn setup_system_tray() -> Option<TrayState> {
 
     let mut builder = TrayIconBuilder::new()
         .with_menu(Box::new(tray_menu))
+        .with_menu_on_left_click(false)
         .with_tooltip("Desktop Cat");
 
     if let Some(tray_icon) = icon {

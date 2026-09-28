@@ -164,6 +164,12 @@ pub trait DesktopEnvironment: Send + Sync {
 
     /// Returns the global cursor position across the virtual desktop in top-left screen coordinates.
     fn global_cursor_position(&self) -> Option<Vec2>;
+
+    /// Returns the seconds since last user input event (keyboard or mouse), if supported by the OS.
+    #[allow(dead_code)]
+    fn user_idle_seconds(&self) -> Option<f32> {
+        None
+    }
 }
 
 // ============================================================================
@@ -206,16 +212,23 @@ pub fn configure_as_background_accessory() {
     unsafe {
         type MsgSendPtr = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> *mut std::ffi::c_void;
         type MsgSendPolicy = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, isize) -> *mut std::ffi::c_void;
+        type MsgSendSetMenu = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, *mut std::ffi::c_void) -> *mut std::ffi::c_void;
 
         let msg_ptr: MsgSendPtr = std::mem::transmute(objc_msgSend as *const ());
         let msg_policy: MsgSendPolicy = std::mem::transmute(objc_msgSend as *const ());
+        let msg_set_menu: MsgSendSetMenu = std::mem::transmute(objc_msgSend as *const ());
 
         let cls = objc_getClass(c"NSApplication".as_ptr());
         let sel_shared = sel_registerName(c"sharedApplication".as_ptr());
         let app = msg_ptr(cls, sel_shared);
 
-        let sel_policy = sel_registerName(c"setActivationPolicy:".as_ptr());
-        let _ = msg_policy(app, sel_policy, 1isize);
+        if !app.is_null() {
+            let sel_policy = sel_registerName(c"setActivationPolicy:".as_ptr());
+            let _ = msg_policy(app, sel_policy, 1isize); // NSApplicationActivationPolicyAccessory
+
+            let sel_set_main_menu = sel_registerName(c"setMainMenu:".as_ptr());
+            let _ = msg_set_menu(app, sel_set_main_menu, std::ptr::null_mut());
+        }
     }
 }
 
@@ -342,6 +355,22 @@ impl DesktopEnvironment for MacOsDesktopEnvironment {
             let y = primary_height - pt.y as f32;
 
             Some(Vec2::new(x, y))
+        }
+    }
+
+    fn user_idle_seconds(&self) -> Option<f32> {
+        unsafe {
+            unsafe extern "C" {
+                fn CGEventSourceSecondsSinceLastEventType(source_state: i32, event_type: u32) -> f64;
+            }
+            // kCGEventSourceStateCombinedSessionState = 0
+            // kCGAnyInputEventType = u32::MAX
+            let secs = CGEventSourceSecondsSinceLastEventType(0, u32::MAX);
+            if secs >= 0.0 && secs < 100_000.0 {
+                Some(secs as f32)
+            } else {
+                None
+            }
         }
     }
 }
