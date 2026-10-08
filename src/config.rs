@@ -19,19 +19,49 @@ pub enum CoatColor {
 }
 
 impl CoatColor {
-    /// Returns the primary body PBR color.
+    /// Returns the primary body fur PBR color.
     pub fn body_color(&self) -> Color {
         match self {
-            CoatColor::Biscuit => Color::srgb(0.93, 0.91, 0.85),
-            CoatColor::White => Color::srgb(0.97, 0.97, 0.98),
-            CoatColor::Grey => Color::srgb(0.58, 0.60, 0.64),
+            // Warm golden ginger (Kayden from Eleceed)
+            CoatColor::Biscuit => Color::srgb(0.92, 0.56, 0.18),
+            // Pristine snow white (Carte from Eleceed)
+            CoatColor::White => Color::srgb(0.98, 0.98, 0.99),
+            // Cool slate grey
+            CoatColor::Grey => Color::srgb(0.56, 0.58, 0.63),
+        }
+    }
+
+    /// Returns the darker tabby stripe marking color.
+    pub fn stripe_color(&self) -> Color {
+        match self {
+            CoatColor::Biscuit => Color::srgb(0.72, 0.35, 0.06), // Rich caramel ginger stripes
+            CoatColor::White => Color::srgb(0.91, 0.92, 0.95),   // Delicate silvery shadow stripes
+            CoatColor::Grey => Color::srgb(0.36, 0.38, 0.43),    // Dark slate stripes
+        }
+    }
+
+    /// Returns the white/cream chest bib and muzzle color.
+    pub fn white_fur_color(&self) -> Color {
+        match self {
+            CoatColor::Biscuit => Color::srgb(0.99, 0.98, 0.97),
+            CoatColor::White => Color::srgb(1.0, 1.0, 1.0),
+            CoatColor::Grey => Color::srgb(0.98, 0.98, 0.98),
+        }
+    }
+
+    /// Returns the colored iris color.
+    pub fn iris_color(&self) -> Color {
+        match self {
+            CoatColor::Biscuit => Color::srgb(0.20, 0.80, 0.72), // Luminous glowing cyan/teal (Kayden!)
+            CoatColor::White => Color::srgb(0.92, 0.68, 0.12),   // Golden amber (Carte!)
+            CoatColor::Grey => Color::srgb(0.30, 0.82, 0.42),    // Radiant emerald green
         }
     }
 
     /// Returns the inner ear accent color.
     pub fn inner_ear_color(&self) -> Color {
         match self {
-            CoatColor::Biscuit => Color::srgb(0.96, 0.78, 0.78),
+            CoatColor::Biscuit => Color::srgb(0.96, 0.76, 0.78),
             CoatColor::White => Color::srgb(0.98, 0.82, 0.84),
             CoatColor::Grey => Color::srgb(0.85, 0.72, 0.76),
         }
@@ -39,15 +69,15 @@ impl CoatColor {
 
     /// Returns the cute nose color.
     pub fn nose_color(&self) -> Color {
-        Color::srgb(0.92, 0.55, 0.62)
+        Color::srgb(0.92, 0.50, 0.58)
     }
 
     /// User-friendly display name.
     pub fn display_name(&self) -> &'static str {
         match self {
-            CoatColor::Biscuit => "Biscuit (Cream)",
-            CoatColor::White => "White",
-            CoatColor::Grey => "Grey",
+            CoatColor::Biscuit => "Kayden (Ginger Tabby)",
+            CoatColor::White => "Carte (Snow White)",
+            CoatColor::Grey => "Smokey (Grey Tabby)",
         }
     }
 
@@ -296,6 +326,8 @@ pub struct CatConfig {
     pub blink_timer: f32,
     /// Blink progress: 0.0 = open, 1.0 = closed
     pub blink_amount: f32,
+    /// Cuddle lean toward cursor during petting/interaction (-1.0 to 1.0)
+    pub cuddle_lean: f32,
     /// Path where settings are saved
     pub config_path: PathBuf,
 }
@@ -348,6 +380,7 @@ impl Default for CatConfig {
             posture_blend: 0.0,
             blink_timer: 3.0,
             blink_amount: 0.0,
+            cuddle_lean: 0.0,
             config_path,
         }
     }

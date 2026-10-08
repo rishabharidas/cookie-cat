@@ -274,25 +274,76 @@ fn start_walking(
     };
 
     let current_pos = config.desktop_pos.unwrap_or(Vec2::new((min_x + max_x) * 0.5, ground_y));
-
     let seed = ((elapsed * 3.71).sin() * 43_758.547).fract().abs();
+    let cat_center_x = current_pos.x + 240.0;
 
-    // Turn inward when nearing screen boundaries
-    let move_dir = if current_pos.x <= min_x + 90.0 {
-        1.0 // Near left edge -> walk right
-    } else if current_pos.x >= max_x - 90.0 || seed < 0.50 {
-        -1.0 // Near right edge or random -> walk left
+    // 1. Mouse-following behavior: if user has a cursor on screen, prefer walking towards it
+    if let Some(mouse) = config.last_global_mouse {
+        let mouse_dx = mouse.x - cat_center_x;
+
+        // Mouse is already nearby (within 130px): stay near user!
+        if mouse_dx.abs() < 130.0 {
+            if seed < 0.55 {
+                config.state = CatAiState::Sitting;
+                config.state_timer = 5.0 + seed * 4.0;
+            } else {
+                config.state = CatAiState::Investigating;
+                config.state_timer = 2.8;
+                config.look_target = Vec3::new((mouse_dx / 100.0).clamp(-1.2, 1.2), 0.55, 2.2);
+            }
+            return;
+        }
+
+        // Mouse is on the right side of the cat: walk toward it!
+        if mouse_dx > 80.0 {
+            if current_pos.x >= max_x - 45.0 {
+                // Already near right edge with mouse on the right: stay here with user, NEVER flee!
+                config.state = CatAiState::Sitting;
+                config.state_timer = 6.0 + seed * 4.0;
+                return;
+            }
+            let walk_dist = (mouse_dx - 60.0).clamp(60.0, 400.0);
+            let target_x = (current_pos.x + walk_dist).clamp(min_x, max_x);
+            config.desktop_target = Vec2::new(target_x, ground_y);
+            config.state = CatAiState::Walking;
+            config.state_timer = (walk_dist / config.settings.speed.pixels_per_second() + 1.8).clamp(2.5, 8.0);
+            return;
+        }
+
+        // Mouse is on the left side of the cat: walk toward it!
+        if mouse_dx < -80.0 {
+            if current_pos.x <= min_x + 45.0 {
+                config.state = CatAiState::Sitting;
+                config.state_timer = 6.0 + seed * 4.0;
+                return;
+            }
+            let walk_dist = ((-mouse_dx) - 60.0).clamp(60.0, 400.0);
+            let target_x = (current_pos.x - walk_dist).clamp(min_x, max_x);
+            config.desktop_target = Vec2::new(target_x, ground_y);
+            config.state = CatAiState::Walking;
+            config.state_timer = (walk_dist / config.settings.speed.pixels_per_second() + 1.8).clamp(2.5, 8.0);
+            return;
+        }
+    }
+
+    // 2. Autonomous wandering when no cursor is commanding attention
+    let move_dir = if current_pos.x <= min_x + 60.0 {
+        1.0 // Near left edge -> stroll inward right
+    } else if current_pos.x >= max_x - 60.0 {
+        -1.0 // Near right edge -> stroll inward left
+    } else if seed < 0.50 {
+        -1.0
     } else {
         1.0
     };
 
     // Realistic feline stroll distances along desktop
     let dist = if seed < 0.40 {
-        110.0 + seed * 260.0
+        90.0 + seed * 200.0
     } else if seed < 0.80 {
-        220.0 + (seed - 0.40) * 450.0
+        160.0 + (seed - 0.40) * 320.0
     } else {
-        140.0 + (seed - 0.80) * 550.0
+        120.0 + (seed - 0.80) * 280.0
     };
 
     let target_x = (current_pos.x + move_dir * dist).clamp(min_x, max_x);
@@ -364,9 +415,13 @@ fn update_roam_movement(
         }
 
         let direction_x = to_target.x.signum();
-        let target_speed = config.settings.speed.pixels_per_second();
 
-        // Smooth acceleration
+        // Smooth deceleration as we approach destination or boundary (Item 6 & 7)
+        let to_boundary = if direction_x > 0.0 { max_x - current_pos.x } else { current_pos.x - min_x };
+        let speed_factor = (dist / 70.0).min(1.0).min((to_boundary / 45.0).clamp(0.25, 1.0));
+        let target_speed = config.settings.speed.pixels_per_second() * speed_factor;
+
+        // Organic acceleration and deceleration
         config.current_velocity.x = config.current_velocity.x.lerp(direction_x * target_speed, 6.0 * dt);
 
         let new_x = (current_pos.x + config.current_velocity.x * dt).clamp(min_x, max_x);

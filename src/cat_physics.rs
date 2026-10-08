@@ -12,7 +12,8 @@
 use std::f32::consts::PI;
 use bevy::prelude::*;
 use crate::cat_model::{
-    CatEar, CatEye, CatHead, CatLeg, CatSquash, CatTailJoint, CatWhisker, LegType,
+    CatBlush, CatEar, CatEye, CatEyeIris, CatEyePupil, CatEyeWing, CatHead, CatLeg, CatSquash,
+    CatTailJoint, CatWhisker, LegType,
 };
 use crate::config::{CatAiState, CatConfig};
 
@@ -37,11 +38,14 @@ impl Plugin for CatPhysicsPlugin {
     }
 }
 
-/// Spring-damper state for squash and stretch bounciness.
+/// Spring-damper state for squash and stretch bounciness, including lateral belly jiggle.
 #[derive(Resource)]
 pub struct SquashPhysics {
     pub scale_offset: Vec3,
     pub velocity: Vec3,
+    pub lateral_offset: f32,
+    pub lateral_velocity: f32,
+    pub last_vel_x: f32,
 }
 
 impl Default for SquashPhysics {
@@ -49,6 +53,9 @@ impl Default for SquashPhysics {
         Self {
             scale_offset: Vec3::ZERO,
             velocity: Vec3::ZERO,
+            lateral_offset: 0.0,
+            lateral_velocity: 0.0,
+            last_vel_x: 0.0,
         }
     }
 }
@@ -115,15 +122,30 @@ fn update_desktop_gravity(
 /// - Stance phase: paw stays firmly on the ground ($Y = \text{rest}$) pushing backward.
 /// - Swing phase: paw lifts into a parabolic step arc ($Y > \text{rest}$) reaching forward.
 /// - Leg timing: 4-beat lateral sequence with 0.25 phase intervals.
+/// - P3: Foot impact micro-squash on the torso when paws strike the ground.
 fn animate_walk_cycle(
     time: Res<Time>,
     config: Res<CatConfig>,
+    mut squash_phys: ResMut<SquashPhysics>,
     mut q_legs: Query<(&CatLeg, &mut Transform)>,
+    mut prev_step_phase: Local<f32>,
 ) {
     let dt = time.delta_secs();
     let is_walking = config.state == CatAiState::Walking || config.state == CatAiState::Stopping;
     let phase = config.walk_phase;
     let posture = config.posture_blend;
+
+    // P3: Foot impact detection — each quarter cycle (0.5 * PI) a paw enters stance phase
+    if is_walking && config.settings.enable_roaming {
+        let step_interval = std::f32::consts::FRAC_PI_2;
+        let prev_step = (*prev_step_phase / step_interval).floor() as i32;
+        let curr_step = (phase / step_interval).floor() as i32;
+        if curr_step != prev_step && config.state == CatAiState::Walking {
+            // Micro-squash impact on paw touchdown gives weighted, chonky step feel
+            squash_phys.velocity.y -= 0.042;
+        }
+    }
+    *prev_step_phase = phase;
 
     // Stride parameters based on current speed
     let stride_z = 0.16;
@@ -219,14 +241,19 @@ fn update_posture_and_squash(
     };
     config.posture_blend = config.posture_blend.lerp(target_posture, 4.0 * dt);
 
-    // 2. Breathing Rhythm
+    // 2. Breathing Rhythm and Purring Vibration
     let (breath_speed, breath_amount) = match config.state {
         CatAiState::Sleeping => (1.3, 0.035),
         CatAiState::Walking => (5.5, 0.018),
-        CatAiState::Petting => (4.5, 0.030),
-        _ => (2.6, 0.022),
+        CatAiState::Petting => (4.5, 0.024),
+        _ => (2.6, 0.020),
     };
     let breath = (elapsed * breath_speed).sin() * breath_amount;
+    let purr = if config.state == CatAiState::Petting {
+        (elapsed * 32.0).sin() * 0.007
+    } else {
+        0.0
+    };
 
     // 3. Torso Vertical Bobbing & Swaying while walking
     let (walk_bob_y, walk_sway_x) = if config.state == CatAiState::Walking {
@@ -239,7 +266,7 @@ fn update_posture_and_squash(
         (0.0, 0.0)
     };
 
-    // 4. Spring Harmonic Physics for impacts, landings, and petting
+    // 4. Spring Harmonic Physics for vertical impacts, landings, and petting
     let spring_stiffness = 85.0;
     let damping = 10.0;
 
@@ -248,31 +275,94 @@ fn update_posture_and_squash(
     let vel = squash_phys.velocity;
     squash_phys.scale_offset += vel * dt;
 
-    // 5. Compute Dynamic Translation (lowers down when sitting/sleeping)
-    let base_y = 0.55 - (config.posture_blend * 0.16) + walk_bob_y;
-    transform.translation = Vec3::new(walk_sway_x, base_y, 0.0);
+    // 4b. P2: Lateral Inertial Belly Jiggle on Direction Change / Sudden Acceleration
+    let curr_vx = config.current_velocity.x;
+    let dvx = curr_vx - squash_phys.last_vel_x;
+    if dvx.abs() > 10.0 {
+        // Belly inertia kicks opposite to acceleration direction
+        squash_phys.lateral_velocity -= (dvx / 140.0).clamp(-0.35, 0.35);
+    }
+    squash_phys.last_vel_x = curr_vx;
 
-    // 6. Compute Dynamic Scale with Volume Preservation
-    let dynamic_y = 1.0 + breath + squash_phys.scale_offset.y - (config.posture_blend * 0.10);
+    // Lateral harmonic spring (softer and bouncier than vertical)
+    let lateral_k = 50.0;
+    let lateral_damping = 6.5;
+    let lateral_force = -squash_phys.lateral_offset * lateral_k - squash_phys.lateral_velocity * lateral_damping;
+    squash_phys.lateral_velocity += lateral_force * dt;
+    let l_vel = squash_phys.lateral_velocity;
+    squash_phys.lateral_offset += l_vel * dt;
+    squash_phys.lateral_offset = squash_phys.lateral_offset.clamp(-0.40, 0.40);
+
+    // 5. Compute Dynamic Translation (lowers down when sitting/sleeping + cuddle lean)
+    let base_y = 0.22 - (config.posture_blend * 0.16) + walk_bob_y;
+    let cuddle_x = config.cuddle_lean * 0.06;
+    transform.translation = Vec3::new(walk_sway_x + cuddle_x, base_y, 0.0);
+    // Subtle affectionate lean rotation when cuddled
+    transform.rotation = Quat::from_rotation_z(-config.cuddle_lean * 0.05);
+
+    // 6. Compute Dynamic Scale with Volume Preservation and Lateral Jiggle
+    let dynamic_y = 1.0 + breath + purr + squash_phys.scale_offset.y - (config.posture_blend * 0.10);
     let dynamic_xz = 1.0 - (breath * 0.5) - (squash_phys.scale_offset.y * 0.45) + (config.posture_blend * 0.06);
 
+    // Apply lateral jiggle: stretches along X when leaning, slight compression on Z
+    let jiggle_x = squash_phys.lateral_offset * 0.14;
+    let jiggle_z = -squash_phys.lateral_offset.abs() * 0.06;
+
     transform.scale = Vec3::new(
-        base_scale * dynamic_xz,
+        base_scale * (dynamic_xz + jiggle_x),
         base_scale * dynamic_y,
-        base_scale * dynamic_xz,
+        base_scale * (dynamic_xz + jiggle_z),
     );
 }
 
-/// Natural feline eye blinking and sleepy closed eyes.
+/// Natural feline eye blinking, sleepy closed eyes, and S3 emotion-shaped irises/pupils.
+///
+/// All three eye layers (CatEye outer, CatEyeIris, CatEyePupil) are queried separately
+/// so their X and Y scales can be driven independently per emotional state:
+///
+/// | State         | Eye outer | Iris          | Pupil                    |
+/// |---------------|-----------|---------------|--------------------------|
+/// | Happy/Petting | wide+flat | wide+squinty  | rounded cute             |
+/// | Curious       | tall+wide | dilated large | narrow tall slit         |
+/// | Startled      | very tall | very large    | fully round (dark flood) |
+/// | Sleeping      | flat line | flat line     | flat line                |
 fn update_eye_blinking(
     time: Res<Time>,
     mut config: ResMut<CatConfig>,
     mut q_eyes: Query<(&CatEye, &mut Transform)>,
+    mut q_wings: Query<
+        (&CatEyeWing, &mut Transform),
+        (Without<CatEye>, Without<CatEyeIris>, Without<CatEyePupil>, Without<CatBlush>),
+    >,
+    mut q_iris: Query<
+        (&CatEyeIris, &mut Transform),
+        (Without<CatEye>, Without<CatEyeWing>, Without<CatEyePupil>, Without<CatBlush>),
+    >,
+    mut q_pupils: Query<
+        (&CatEyePupil, &mut Transform),
+        (Without<CatEye>, Without<CatEyeWing>, Without<CatEyeIris>, Without<CatBlush>),
+    >,
+    mut q_blush: Query<
+        (&CatBlush, &mut Transform),
+        (Without<CatEye>, Without<CatEyeWing>, Without<CatEyeIris>, Without<CatEyePupil>),
+    >,
 ) {
     if !config.settings.enable_blinking {
-        // Reset eyes to open
+        // Reset all layers to rest scale
         for (eye, mut transform) in &mut q_eyes {
             transform.scale = eye.rest_scale;
+        }
+        for (wing, mut transform) in &mut q_wings {
+            transform.scale = wing.rest_scale;
+        }
+        for (iris, mut transform) in &mut q_iris {
+            transform.scale = iris.rest_scale;
+        }
+        for (pupil, mut transform) in &mut q_pupils {
+            transform.scale = pupil.rest_scale;
+        }
+        for (_blush, mut transform) in &mut q_blush {
+            transform.scale = Vec3::ZERO;
         }
         return;
     }
@@ -303,19 +393,78 @@ fn update_eye_blinking(
         }
     }
 
-    // Apply eye vertical compression
-    let y_scale_factor = (1.0 - config.blink_amount * 0.92).clamp(0.08, 1.0);
+    // Blink: vertical compression that applies to ALL layers equally
+    let blink_y = (1.0 - config.blink_amount * 0.92).clamp(0.08, 1.0);
 
+    // S3: Emotion-driven shape multipliers for the outer eye oval
+    // emotion_x = horizontal stretch (> 1 = wider), emotion_y = vertical modifier
+    let (eye_ex, eye_ey) = match config.state {
+        CatAiState::Petting                                     => (1.25, 0.50), // happy squint
+        CatAiState::Investigating | CatAiState::LookingAround   => (1.10, 1.20),
+        CatAiState::Landing                                     => (1.14, 1.28),
+        _                                                       => (1.00, 1.00),
+    };
+
+    // S3: Iris emotion — iris pops larger when curious, squints when happy
+    let (iris_ex, iris_ey) = match config.state {
+        CatAiState::Petting                                     => (1.18, 0.55),
+        CatAiState::Investigating | CatAiState::LookingAround   => (1.12, 1.18),
+        CatAiState::Landing                                     => (1.20, 1.25),
+        _                                                       => (1.00, 1.00),
+    };
+
+    // S3: Pupil emotion — slit narrows when curious, rounds fully when startled
+    let (pupil_ex, pupil_ey) = match config.state {
+        CatAiState::Petting                                     => (1.10, 0.65), // rounded happy
+        CatAiState::Investigating | CatAiState::LookingAround   => (0.85, 1.30), // tall thin slit
+        CatAiState::Landing                                     => (1.60, 1.60), // fully dilated
+        _                                                       => (1.00, 1.00),
+    };
+
+    // Apply blink + emotion to the eye white / outer oval
     for (eye, mut transform) in &mut q_eyes {
         transform.scale = Vec3::new(
-            eye.rest_scale.x,
-            eye.rest_scale.y * y_scale_factor,
+            eye.rest_scale.x * eye_ex,
+            eye.rest_scale.y * blink_y * eye_ey,
             eye.rest_scale.z,
         );
     }
+
+    // Apply blink + emotion to the winged anime eyeliner
+    for (wing, mut transform) in &mut q_wings {
+        transform.scale = Vec3::new(
+            wing.rest_scale.x * eye_ex,
+            wing.rest_scale.y * blink_y * eye_ey,
+            wing.rest_scale.z,
+        );
+    }
+
+    // Apply blink + emotion to iris
+    for (iris, mut transform) in &mut q_iris {
+        transform.scale = Vec3::new(
+            iris.rest_scale.x * iris_ex,
+            iris.rest_scale.y * blink_y * iris_ey,
+            iris.rest_scale.z,
+        );
+    }
+
+    // Apply blink + emotion to pupil
+    for (pupil, mut transform) in &mut q_pupils {
+        transform.scale = Vec3::new(
+            pupil.rest_scale.x * pupil_ex,
+            pupil.rest_scale.y * blink_y * pupil_ey,
+            pupil.rest_scale.z,
+        );
+    }
+
+    // Smoothly fade in/out cheek blush during petting/happy
+    let target_blush = if config.state == CatAiState::Petting { 1.0 } else { 0.0 };
+    for (blush, mut transform) in &mut q_blush {
+        transform.scale = transform.scale.lerp(blush.rest_scale * target_blush, 6.0 * dt);
+    }
 }
 
-/// Head tracking, curious tilts, and look-around behavior.
+/// Head tracking, curious tilts, and look-around behavior with elastic limit spring (P4).
 fn update_head_look_and_tilt(
     time: Res<Time>,
     config: Res<CatConfig>,
@@ -332,14 +481,32 @@ fn update_head_look_and_tilt(
         return;
     }
 
-    // Calculate direction from head to look target
-    let head_pos = Vec3::new(0.0, 0.85, 0.45);
+    // Blissful upward chin tilt when being petted, leaning affectionately into the hand
+    if config.state == CatAiState::Petting {
+        let pet_yaw = (config.cuddle_lean * 0.22).clamp(-0.35, 0.35);
+        let pet_pitch = -0.18; // chin raised contentedly
+        let pet_roll = (config.cuddle_lean * 0.10).clamp(-0.15, 0.15);
+        let pet_rot = Quat::from_euler(EulerRot::YXZ, pet_yaw, pet_pitch, pet_roll);
+        transform.rotation = transform.rotation.slerp(pet_rot, 7.5 * dt);
+        return;
+    }
+
+    // Approximate head position in model-root local space for look-direction maths.
+    let head_pos = Vec3::new(0.0, 0.70, 0.14);
     let to_target = (config.look_target - head_pos).normalize_or_zero();
 
-    // Natural feline neck rotation limits:
-    // Yaw: +/- 45 deg, Pitch: -25 to +20 deg
-    let target_yaw = (to_target.x * 0.80).clamp(-0.75, 0.75);
-    let target_pitch = (-to_target.y * 0.65).clamp(-0.45, 0.35);
+    // Natural feline neck rotation limits with soft elastic overshoot (P4):
+    // Softly yields past normal limits when tracking extreme angles
+    let raw_yaw = to_target.x * 0.80;
+    let hard_yaw = raw_yaw.clamp(-0.75, 0.75);
+    let excess_yaw = raw_yaw - hard_yaw;
+    let target_yaw = hard_yaw + excess_yaw * 0.18; // elastic neck strain
+
+    let raw_pitch = -to_target.y * 0.65;
+    let hard_pitch = raw_pitch.clamp(-0.45, 0.35);
+    let excess_pitch = raw_pitch - hard_pitch;
+    let target_pitch = hard_pitch + excess_pitch * 0.18;
+
     let target_roll = config.head_tilt.clamp(-0.25, 0.25);
 
     let target_rot = Quat::from_euler(EulerRot::YXZ, target_yaw, target_pitch, target_roll);
@@ -367,7 +534,7 @@ fn update_whisker_twitch(
     }
 }
 
-/// Spring-damper tail physics: simulates inertia, body turns, and happy harmonic wagging.
+/// Spring-damper tail physics: cascading lag per segment, wider tip sweep, and expressive wags (P1).
 fn update_tail_physics(
     time: Res<Time>,
     config: Res<CatConfig>,
@@ -388,13 +555,18 @@ fn update_tail_physics(
 
     for (mut joint, mut transform) in &mut q_tail {
         let i = joint.index as f32;
-        // Harmonic wave propagated along tail chain
-        let wave_target_x = (elapsed * wag_speed - i * 0.65).sin() * wag_amplitude;
-        let wave_target_y = (elapsed * (wag_speed * 0.5) - i * 0.35).cos() * (wag_amplitude * 0.35);
 
-        // Spring-damper tracking to target
-        let spring_k = 18.0;
-        let damping = 6.5;
+        // P1: Cascading spring stiffness & damping:
+        // Base joint (0) is stiffer and leads; tip (2) is floppier with higher delay
+        let spring_k = 22.0 / (1.0 + i * 0.65);
+        let damping = (7.8 - i * 0.90).max(2.8);
+
+        // Wave amplitude increases towards the tip (tip sweeps widest)
+        let wave_amp = wag_amplitude * (1.0 + i * 0.50);
+
+        // Progressive phase lag along the chain creates a natural traveling wave
+        let wave_target_x = (elapsed * wag_speed - i * 0.85).sin() * wave_amp;
+        let wave_target_y = (elapsed * (wag_speed * 0.5) - i * 0.50).cos() * (wave_amp * 0.35);
 
         let diff_x = wave_target_x - joint.current_angle.x;
         let diff_y = wave_target_y - joint.current_angle.y;
@@ -415,11 +587,11 @@ fn update_tail_physics(
     }
 }
 
-/// Ear twitch dynamics: secondary motion on the ears with random quick twitches.
+/// Ear dynamics: secondary motion with underdamped spring physics, sleep droop, and random twitches (P5).
 fn update_ear_twitch(
     time: Res<Time>,
     config: Res<CatConfig>,
-    mut q_ears: Query<(&CatEar, &mut Transform)>,
+    mut q_ears: Query<(&mut CatEar, &mut Transform)>,
     mut twitch_timer: Local<f32>,
     mut twitch_active: Local<f32>,
 ) {
@@ -429,7 +601,7 @@ fn update_ear_twitch(
     if *twitch_timer <= 0.0 {
         // Schedule next twitch in 3.0 to 6.5 seconds
         *twitch_timer = 3.0 + ((time.elapsed_secs() * 3.7).sin().abs()) * 3.5;
-        *twitch_active = 0.30;
+        *twitch_active = 0.28;
     }
 
     let is_twitching = *twitch_active > 0.0;
@@ -440,14 +612,30 @@ fn update_ear_twitch(
     // Swivel ears slightly with look direction
     let look_yaw = (config.look_target.x * 0.15).clamp(-0.15, 0.15);
 
-    for (ear, mut transform) in &mut q_ears {
-        let mut rot = ear.base_rotation * Quat::from_rotation_y(look_yaw);
+    // Sleep droop: relaxed outward angle when sleeping
+    let sleep_droop = if config.state == CatAiState::Sleeping { 0.22 } else { 0.0 };
 
+    for (mut ear, mut transform) in &mut q_ears {
+        // Kick spring velocity if twitching
         if is_twitching && ear.is_left {
-            let wobble = (time.elapsed_secs() * 36.0).sin() * 0.16;
-            rot *= Quat::from_rotation_z(wobble);
+            let kick = (time.elapsed_secs() * 42.0).sin() * 0.22;
+            ear.dynamic_velocity += kick * 30.0 * dt;
         }
 
-        transform.rotation = transform.rotation.slerp(rot, 14.0 * dt);
+        // P5: Underdamped spring toward rest position (damping ratio < 1 -> natural bounciness)
+        let spring_k = 38.0;
+        let damping = 4.8;
+        let force = -ear.dynamic_angle * spring_k - ear.dynamic_velocity * damping;
+        ear.dynamic_velocity += force * dt;
+        let vel = ear.dynamic_velocity;
+        ear.dynamic_angle += vel * dt;
+        ear.dynamic_angle = ear.dynamic_angle.clamp(-0.4, 0.4);
+
+        let droop_angle = if ear.is_left { sleep_droop } else { -sleep_droop };
+        let rot = ear.base_rotation
+            * Quat::from_rotation_y(look_yaw)
+            * Quat::from_rotation_z(ear.dynamic_angle + droop_angle);
+
+        transform.rotation = transform.rotation.slerp(rot, 16.0 * dt);
     }
 }

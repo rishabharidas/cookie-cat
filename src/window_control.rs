@@ -199,8 +199,16 @@ fn update_global_mouse_attention(
     }
 }
 
-/// Handles mouse clicks: left-click to drag/pet, right-click to cycle coat.
+#[derive(Default)]
+struct PettingDragTracker {
+    pressed_on_cat: bool,
+    press_start_pos: Vec2,
+    has_started_window_drag: bool,
+}
+
+/// Handles mouse interactions: left-click to cuddle/pet, intentional drag to move, right-click to cycle coat.
 fn handle_mouse_interactions_3d(
+    time: Res<Time>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     cursor_pos: Res<CursorScreenPos>,
     mut config: ResMut<CatConfig>,
@@ -208,25 +216,21 @@ fn handle_mouse_interactions_3d(
     mut q_window: Query<&mut Window, With<PrimaryWindow>>,
     q_cat: Query<&Transform, With<CatRoot>>,
     q_camera: Query<(&Camera, &GlobalTransform)>,
+    mut tracker: Local<PettingDragTracker>,
 ) {
+    let dt = time.delta_secs();
+
     let Ok(mut window) = q_window.single_mut() else {
         return;
     };
 
-    // Track dragging state and release into gravity
-    if mouse_button.just_released(MouseButton::Left) && config.is_dragged {
-        config.is_dragged = false;
-
-        // If dropped above ground, enable falling
-        if let WindowPosition::At(pos) = window.position {
-            config.desktop_pos = Some(pos.as_vec2());
-            if pos.y < config.ground_y as i32 - 10 && config.settings.enable_gravity {
-                config.state = CatAiState::Falling;
-            }
-        }
-    }
-
     let Some(mouse_px) = cursor_pos.0 else {
+        if !mouse_button.pressed(MouseButton::Left) && tracker.pressed_on_cat {
+            tracker.pressed_on_cat = false;
+            tracker.has_started_window_drag = false;
+            config.is_dragged = false;
+        }
+        config.cuddle_lean = config.cuddle_lean.lerp(0.0, 5.0 * dt);
         return;
     };
 
@@ -246,25 +250,69 @@ fn handle_mouse_interactions_3d(
     let effective_radius = CAT_SCREEN_RADIUS * config.settings.size.scale_factor();
     let is_on_cat = cat_screen_px.distance(mouse_px) <= effective_radius;
 
-    if !is_on_cat {
-        return;
-    }
+    // 1. Mouse Button Just Pressed on the Cat
+    if mouse_button.just_pressed(MouseButton::Left) && is_on_cat {
+        tracker.pressed_on_cat = true;
+        tracker.press_start_pos = mouse_px;
+        tracker.has_started_window_drag = false;
 
-    // Left Click: Drag window & Trigger petting bounce reaction
-    if mouse_button.just_pressed(MouseButton::Left) {
-        config.is_dragged = true;
-        window.start_drag_move();
-
-        // Trigger joyful petting reaction & spring jump
+        // Enter affectionate petting / cuddling state
         config.state = CatAiState::Petting;
         config.petting_timer = 2.0;
 
-        squash_phys.scale_offset.y += 0.35;
-        squash_phys.velocity.y += 3.2;
+        // Gentle soft purr squash dip — zero coordinate jumps, zero teleporting!
+        squash_phys.velocity.y -= 0.7;
+
+        let lean_x = ((mouse_px.x - cat_screen_px.x) / 75.0).clamp(-1.0, 1.0);
+        config.cuddle_lean = lean_x;
     }
 
-    // Right Click: Quick cycle coat color
-    if mouse_button.just_pressed(MouseButton::Right) {
+    // 2. Mouse Button Held Down: Cuddling & Intentional Drag Detection
+    if mouse_button.pressed(MouseButton::Left) && tracker.pressed_on_cat {
+        // Continuously refresh petting timer while interacting
+        config.state = CatAiState::Petting;
+        config.petting_timer = 1.6;
+
+        let lean_x = ((mouse_px.x - cat_screen_px.x) / 75.0).clamp(-1.0, 1.0);
+        config.cuddle_lean = config.cuddle_lean.lerp(lean_x, 8.0 * dt);
+
+        // Check for intentional window drag move (> 20px threshold while holding)
+        let drag_dist = mouse_px.distance(tracker.press_start_pos);
+        if !tracker.has_started_window_drag && drag_dist > 20.0 {
+            tracker.has_started_window_drag = true;
+            config.is_dragged = true;
+            window.start_drag_move();
+        }
+    } else {
+        // Decay cuddle lean back to resting position
+        config.cuddle_lean = config.cuddle_lean.lerp(0.0, 6.0 * dt);
+    }
+
+    // 3. Mouse Button Released
+    if mouse_button.just_released(MouseButton::Left) {
+        if tracker.has_started_window_drag {
+            config.is_dragged = false;
+
+            // Release into desktop gravity if dropped high above ground
+            if let WindowPosition::At(pos) = window.position {
+                config.desktop_pos = Some(pos.as_vec2());
+                if pos.y < config.ground_y as i32 - 35 && config.settings.enable_gravity {
+                    config.state = CatAiState::Falling;
+                } else {
+                    // Softly clamp to ground level without triggering a violent drop impact
+                    let safe_pos = Vec2::new(pos.x as f32, config.ground_y);
+                    config.desktop_pos = Some(safe_pos);
+                    window.position = WindowPosition::At(safe_pos.as_ivec2());
+                }
+            }
+        }
+
+        tracker.pressed_on_cat = false;
+        tracker.has_started_window_drag = false;
+    }
+
+    // 4. Right Click: Quick cycle coat color (Kayden Tabby -> Carte White -> Smokey Grey)
+    if mouse_button.just_pressed(MouseButton::Right) && is_on_cat {
         config.settings.coat = config.settings.coat.next();
         println!("Switched coat to: {}", config.settings.coat.display_name());
         config.save_to_disk();

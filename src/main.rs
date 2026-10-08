@@ -116,15 +116,25 @@ fn main() {
 }
 
 /// Sets up 3D camera and studio key/fill/rim lights.
+///
+/// Camera design intent — webtoon / manhwa panel feel:
+/// - Y=1.8, Z=4.2  →  ~18° elevation above the cat (gentle, not top-down)
+/// - FOV 50°       →  slightly narrower than default, reduces fisheye distortion
+/// - Result: you see the full body front-on with visible 3D depth, like a
+///   webtoon character drawn from just above eye level.
 fn setup_3d_scene(mut commands: Commands) {
-    // 3D Camera with transparent clear color
+    // 3D Camera — webtoon panel angle
     commands.spawn((
         Camera3d::default(),
         Camera {
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
-        Transform::from_xyz(0.0, 3.2, 4.6).looking_at(Vec3::new(0.0, 0.4, 0.0), Vec3::Y),
+        Projection::Perspective(PerspectiveProjection {
+            fov: 50.0_f32.to_radians(),
+            ..default()
+        }),
+        Transform::from_xyz(0.0, 1.8, 4.2).looking_at(Vec3::new(0.0, 0.40, 0.0), Vec3::Y),
     ));
 
     // Key Light (warm sunlight from upper right)
@@ -138,15 +148,26 @@ fn setup_3d_scene(mut commands: Commands) {
         Transform::from_xyz(4.0, 7.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Fill / Rim Light (soft cool rim light from back left for beautiful contours)
+    // Fill / Cool Light (soft cool fill from front left for beautiful color balance)
     commands.spawn((
         DirectionalLight {
             color: Color::srgb(0.90, 0.94, 1.0),
-            illuminance: 3200.0,
+            illuminance: 3400.0,
             shadow_maps_enabled: false,
             ..default()
         },
-        Transform::from_xyz(-4.0, 4.0, -3.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(-4.0, 4.0, 3.0).looking_at(Vec3::new(0.0, 0.40, 0.0), Vec3::Y),
+    ));
+
+    // Webtoon Back Rim Light (warm golden backlight that rims ears, fur, and tail)
+    commands.spawn((
+        DirectionalLight {
+            color: Color::srgb(1.0, 0.92, 0.82),
+            illuminance: 5200.0,
+            shadow_maps_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 3.5, -4.5).looking_at(Vec3::new(0.0, 0.40, 0.0), Vec3::Y),
     ));
 }
 
