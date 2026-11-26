@@ -24,3 +24,8 @@ Planned features, macOS polish, and cross-platform compatibility milestones for 
 - [ ] **Windows (`windows/`):** Native C++17 + Win32 + GDI+/Direct2D (`WS_EX_LAYERED` transparent overlay with per-pixel hit-testing), WASAPI/GSMTC music detection, and `Shell_NotifyIcon` tray.
 - [ ] **Linux (`linux/` — Arch, Debian/Ubuntu, Wayland & X11):** Native C++17 + GTK3 + Cairo (RGBA transparent window + `cairo_region` input mask), MPRIS D-Bus / PipeWire music detection, and `StatusNotifier` / `AppIndicator3` tray, packaged as `.deb` and Arch `PKGBUILD`.
 - [ ] **GitHub Actions CI:** Automated matrix builds for macOS `.zip`, Windows `.exe`, Debian `.deb`, and Arch `.tar.zst` on tagged releases.
+
+## 5. Future / Advanced Animations (Post Multi-Platform)
+- [ ] **2.5D Walking Gait:** Add a procedural side/3-quarter walking animation (leg stride, body bob, and tail balance) in `CatRenderer` + `CatPhysics` while smoothly moving the overlay window across the screen or between monitors.
+- [ ] **Workspace / Space-Switch Walking:** Subscribe to workspace change events (`NSWorkspace.activeSpaceDidChangeNotification` on macOS, Virtual Desktop / EWMH / Wayland events on Windows & Linux) so Cookie walks into the newly active desktop/workspace instead of appearing statically.
+
