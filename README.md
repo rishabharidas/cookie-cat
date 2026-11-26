@@ -27,6 +27,11 @@ Cookie's 2.5D spherical dome head projection, unified C1-continuous cat silhouet
 open Cookie.app
 ```
 
+> **Note for Downloaded Releases:** If macOS Gatekeeper blocks the downloaded app on first launch (because it is ad-hoc signed without an Apple Developer ID certificate), either **Right-click `Cookie.app` → Open**, or run:
+> ```bash
+> xattr -cr Cookie.app && open Cookie.app
+> ```
+
 ## License
 
 MIT License. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for KuroCat MIT License attribution.
