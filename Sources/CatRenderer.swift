@@ -719,6 +719,17 @@ final class CatRenderer {
 
     // MARK: - Fitted Wireless Headphones (Music Listening Mode)
 
+    private func cupPoint(side: CGFloat, yawRad: CGFloat, pitchRad: CGFloat) -> CGPoint {
+        var pt = projectHead3D(x: side * 45.5, y: -13.0, z: -4.0, yawRad: yawRad, pitchRad: pitchRad).pt
+        // Keep earcups anchored on the outer temple/cheek edge so they never slide onto the eyes
+        if side < 0 {
+            pt.x = min(pt.x, -42.5)
+        } else {
+            pt.x = max(pt.x, 42.5)
+        }
+        return pt
+    }
+
     private func drawWirelessHeadphones(in ctx: CGContext, center: CGPoint, physics: CatPhysics, skin: SkinSpec) {
         ctx.saveGState()
         ctx.translateBy(x: center.x, y: center.y)
@@ -727,40 +738,42 @@ final class CatRenderer {
 
         let yawRad = physics.headYaw * 0.50
         let pitchRad = physics.headPitch * 0.36
-        let farSign: CGFloat = physics.headYaw >= 0 ? -1.0 : 1.0
+        let farSign: CGFloat = physics.headYaw >= 0 ? 1.0 : -1.0
         let nearSign: CGFloat = -farSign
 
-        drawWirelessCup(side: farSign, yawRad: yawRad, pitchRad: pitchRad, physics: physics, skin: skin, in: ctx)
+        let leftCup = cupPoint(side: -1, yawRad: yawRad, pitchRad: pitchRad)
+        let rightCup = cupPoint(side: 1, yawRad: yawRad, pitchRad: pitchRad)
+
+        drawWirelessCup(side: farSign, cup: farSign < 0 ? leftCup : rightCup, physics: physics, skin: skin, in: ctx)
 
         let bandPts: [CGPoint] = [
-            projectHead3D(x: -44, y: -5, z: 4, yawRad: yawRad, pitchRad: pitchRad).pt,
-            projectHead3D(x: -25, y: -31, z: 8, yawRad: yawRad, pitchRad: pitchRad).pt,
-            projectHead3D(x: 0, y: -35, z: 10, yawRad: yawRad, pitchRad: pitchRad).pt,
-            projectHead3D(x: 25, y: -31, z: 8, yawRad: yawRad, pitchRad: pitchRad).pt,
-            projectHead3D(x: 44, y: -5, z: 4, yawRad: yawRad, pitchRad: pitchRad).pt,
+            leftCup,
+            projectHead3D(x: -26, y: -31, z: 2, yawRad: yawRad, pitchRad: pitchRad).pt,
+            projectHead3D(x: 0, y: -34, z: 4, yawRad: yawRad, pitchRad: pitchRad).pt,
+            projectHead3D(x: 26, y: -31, z: 2, yawRad: yawRad, pitchRad: pitchRad).pt,
+            rightCup,
         ]
         let bandPath = smoothOpenPath(through: bandPts)
         ctx.addPath(bandPath)
         ctx.setStrokeColor(skin.palette.outline)
-        ctx.setLineWidth(7.8)
+        ctx.setLineWidth(7.6)
         ctx.setLineCap(.round)
         ctx.strokePath()
 
         ctx.addPath(bandPath)
         ctx.setStrokeColor(skin.palette.headphoneBand)
-        ctx.setLineWidth(4.6)
+        ctx.setLineWidth(4.5)
         ctx.strokePath()
 
-        drawWirelessCup(side: nearSign, yawRad: yawRad, pitchRad: pitchRad, physics: physics, skin: skin, in: ctx)
+        drawWirelessCup(side: nearSign, cup: nearSign < 0 ? leftCup : rightCup, physics: physics, skin: skin, in: ctx)
         ctx.restoreGState()
     }
 
-    private func drawWirelessCup(side: CGFloat, yawRad: CGFloat, pitchRad: CGFloat, physics: CatPhysics, skin: SkinSpec, in ctx: CGContext) {
-        let cup = projectHead3D(x: side * 44, y: -5, z: 4, yawRad: yawRad, pitchRad: pitchRad).pt
-        let depthScale = 1.0 + side * physics.headYaw * 0.16
+    private func drawWirelessCup(side: CGFloat, cup: CGPoint, physics: CatPhysics, skin: SkinSpec, in ctx: CGContext) {
+        let depthScale = 1.0 - side * physics.headYaw * 0.14
         let pulse = 1.0 + (0.5 - 0.5 * cos(physics.musicBeatPhase)) * 0.05
-        let w: CGFloat = 10.0 * max(0.75, depthScale) * pulse
-        let h: CGFloat = 20.0 * pulse
+        let w: CGFloat = 9.5 * max(0.75, depthScale) * pulse
+        let h: CGFloat = 19.0 * pulse
 
         ctx.saveGState()
         ctx.translateBy(x: cup.x, y: cup.y)

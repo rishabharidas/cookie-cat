@@ -19,11 +19,14 @@ if CommandLine.arguments.contains("--render-preview") {
             p.headYaw = -0.20; p.headPitch = 0.05; p.eyeLookX = -0.2
         }),
         ("look_left", .black, { p in
-            p.headYaw = -0.65; p.headPitch = 0.12; p.eyeLookX = -0.6; p.musicLevel = 1.0
+            p.headYaw = -0.85; p.headPitch = 0.35; p.eyeLookX = -0.6; p.musicLevel = 1.0
             p.particles = [
                 FloatingParticle(kind: .noteDouble, x: 215, y: 78, vx: 0, vy: 0, age: 0.4, lifetime: 1.6, scale: 1.1, phase: 0, color: CGColor(red: 0.4, green: 0.85, blue: 1.0, alpha: 1.0)),
                 FloatingParticle(kind: .noteSingle, x: 205, y: 60, vx: 0, vy: 0, age: 0.6, lifetime: 1.6, scale: 1.0, phase: 0, color: CGColor(red: 1.0, green: 0.52, blue: 0.76, alpha: 1.0)),
             ]
+        }),
+        ("look_right", .black, { p in
+            p.headYaw = 0.85; p.headPitch = 0.35; p.eyeLookX = 0.6; p.musicLevel = 1.0
         }),
     ]
 

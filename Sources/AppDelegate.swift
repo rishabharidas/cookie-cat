@@ -171,14 +171,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(statusItemClicked(_:))
-            button.sendAction(on: [.rightMouseUp])
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         updateStatusBarIcon(isListening: musicMonitor.isListening)
     }
 
     @objc private func statusItemClicked(_ sender: AnyObject?) {
-        guard NSApp.currentEvent?.type == .rightMouseUp else { return }
-        let menu = buildMenu()
+        let isRightClick = NSApp.currentEvent?.type == .rightMouseUp
+        let menu = isRightClick ? buildSystemMenu() : buildCustomizationMenu()
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -268,19 +268,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         img.isTemplate = true
         statusItem.button?.image = img
-        statusItem.button?.toolTip = isListening ? "Cookie — Listening to music ♪ (Right-click for menu)" : "Cookie (Right-click for menu)"
+        statusItem.button?.toolTip = isListening
+            ? "Cookie — Listening ♪ (Left-click: Customize • Right-click: Options)"
+            : "Cookie (Left-click: Customize • Right-click: Options)"
+    }
+
+    private func buildCustomizationMenu() -> NSMenu {
+        let menu = NSMenu()
+        appendStatusHeader(to: menu)
+        appendCustomizationItems(to: menu)
+        return menu
+    }
+
+    private func buildSystemMenu() -> NSMenu {
+        let menu = NSMenu()
+        appendStatusHeader(to: menu)
+        appendSystemItems(to: menu)
+        return menu
     }
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        appendStatusHeader(to: menu)
+        appendCustomizationItems(to: menu)
+        menu.addItem(.separator())
+        appendSystemItems(to: menu)
+        return menu
+    }
 
+    private func appendStatusHeader(to menu: NSMenu) {
         let statusText = musicMonitor.isListening ? "Cookie • Listening ♪" : "Cookie • Watching Mouse"
         let header = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         header.isEnabled = false
         statusMenuItem = header
         menu.addItem(header)
         menu.addItem(.separator())
+    }
 
+    private func appendCustomizationItems(to menu: NSMenu) {
         // Music Mode submenu
         let musicSubmenu = NSMenu()
         for mode in MusicMode.allCases {
@@ -351,7 +376,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         borderItem.target = self
         borderItem.state = showBorder ? .on : .off
         menu.addItem(borderItem)
+    }
 
+    private func appendSystemItems(to menu: NSMenu) {
         // High FPS toggle
         let fpsItem = NSMenuItem(
             title: "High Frame Rate (60fps)",
@@ -381,8 +408,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(title: "Quit Cookie", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
-
-        return menu
     }
 
     @objc private func selectMusicMode(_ sender: NSMenuItem) {
