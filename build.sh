@@ -11,6 +11,9 @@ rm -rf "${APP_BUNDLE}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
 cp Resources/Info.plist "${CONTENTS_DIR}/Info.plist"
+if [ -f "Resources/AppIcon.icns" ]; then
+  cp Resources/AppIcon.icns "${RESOURCES_DIR}/AppIcon.icns"
+fi
 
 swiftc \
   -O \
@@ -27,5 +30,8 @@ swiftc \
   Sources/AppDelegate.swift \
   Sources/main.swift \
   -o "${MACOS_DIR}/${APP_NAME}"
+
+# Ad-hoc sign so macOS Gatekeeper does not report the bundle as "damaged"
+codesign --force --deep --sign - "${APP_BUNDLE}"
 
 echo "Built ${APP_BUNDLE} successfully ($(du -sh "${MACOS_DIR}/${APP_NAME}" | cut -f1))."
