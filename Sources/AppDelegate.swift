@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -12,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var lastFrameInterval: TimeInterval = 1.0 / 30.0
     private var lastIconListeningState: Bool?
+    private var lastNowPlayingDisplay: String?
     private var statusMenuItem: NSMenuItem?
 
     // Persisted preferences
@@ -22,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         static let highFPS = "cookie.highFPS"
         static let scale = "cookie.scale"
         static let musicMode = "cookie.musicMode"
+        static let beatSync = "cookie.beatSync"
         static let clickThrough = "cookie.clickThrough"
         static let posX = "cookie.posX"
         static let posY = "cookie.posY"
@@ -84,6 +87,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: PrefKey.clickThrough) }
     }
 
+    private var beatSyncEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: PrefKey.beatSync) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: PrefKey.beatSync)
+            musicMonitor.beatSyncEnabled = newValue
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
@@ -91,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let mode = MusicMode(rawValue: savedMode) {
             musicMonitor.mode = mode
         }
+        musicMonitor.beatSyncEnabled = beatSyncEnabled
         physics.highFrameRate = highFrameRate
 
         setupOverlayWindow()
@@ -268,15 +280,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         img.isTemplate = true
         statusItem.button?.image = img
-        statusItem.button?.toolTip = isListening
-            ? "Cookie — Listening ♪ (Left-click: Customize • Right-click: Options)"
-            : "Cookie (Left-click: Customize • Right-click: Options)"
+        updateTooltips()
+    }
+
+    private func listeningStatusLine() -> String? {
+        guard musicMonitor.isListening else { return nil }
+        if let track = musicMonitor.nowPlayingDisplay {
+            return "Listening to \(track) ♪"
+        }
+        return "Listening to audio ♪"
+    }
+
+    private func updateTooltips() {
+        let listeningLine = listeningStatusLine()
+        let statusTip = listeningLine ?? "Cookie"
+        if statusItem.button?.toolTip != statusTip {
+            statusItem.button?.toolTip = statusTip
+        }
+
+        let catTip = "\(statusTip)\nLeft-click: Pet or Drag\nRight-click: Full Menu"
+        if overlayWindow?.catView.toolTip != catTip {
+            overlayWindow?.catView.toolTip = catTip
+        }
     }
 
     private func buildCustomizationMenu() -> NSMenu {
         let menu = NSMenu()
         appendStatusHeader(to: menu)
         appendCustomizationItems(to: menu)
+        menu.addItem(.separator())
+        let hintText = "More options on right-click"
+        let hintItem = NSMenuItem(title: hintText, action: nil, keyEquivalent: "")
+        hintItem.isEnabled = false
+        hintItem.attributedTitle = NSAttributedString(
+            string: hintText,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.tertiaryLabelColor,
+            ]
+        )
+        menu.addItem(hintItem)
         return menu
     }
 
@@ -297,7 +340,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func appendStatusHeader(to menu: NSMenu) {
-        let statusText = musicMonitor.isListening ? "Cookie • Listening ♪" : "Cookie • Watching Mouse"
+        let statusText: String
+        if let line = listeningStatusLine() {
+            statusText = line.count > 48 ? String(line.prefix(45)) + "…" : line
+        } else {
+            statusText = "Cookie • Watching Mouse"
+        }
         let header = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         header.isEnabled = false
         statusMenuItem = header
@@ -314,6 +362,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.representedObject = mode.rawValue
             item.state = (musicMonitor.mode == mode) ? .on : .off
             musicSubmenu.addItem(item)
+        }
+        if #available(macOS 14.2, *) {
+            musicSubmenu.addItem(.separator())
+            let beatItem = NSMenuItem(
+                title: "Audio-Reactive Beat Sync",
+                action: #selector(toggleBeatSync),
+                keyEquivalent: ""
+            )
+            beatItem.target = self
+            beatItem.state = beatSyncEnabled ? .on : .off
+            beatItem.toolTip = "Uses System Audio Recording permission to sync head-bob with music tempo"
+            musicSubmenu.addItem(beatItem)
         }
         let musicItem = NSMenuItem(title: "Music & Headphones", action: nil, keyEquivalent: "")
         musicItem.submenu = musicSubmenu
@@ -403,6 +463,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resetItem.target = self
         menu.addItem(resetItem)
 
+        if #available(macOS 13.0, *) {
+            let launchItem = NSMenuItem(
+                title: "Launch at Login",
+                action: #selector(toggleLaunchAtLogin),
+                keyEquivalent: ""
+            )
+            launchItem.target = self
+            launchItem.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
+            menu.addItem(launchItem)
+        }
+
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Cookie", action: #selector(quitApp), keyEquivalent: "q")
@@ -415,6 +486,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let mode = MusicMode(rawValue: raw) else { return }
         musicMonitor.mode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: PrefKey.musicMode)
+        refreshMenusAndIcon()
+    }
+
+    @objc private func toggleBeatSync() {
+        beatSyncEnabled = !beatSyncEnabled
         refreshMenusAndIcon()
     }
 
@@ -453,6 +529,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshMenusAndIcon()
     }
 
+    @objc private func toggleLaunchAtLogin() {
+        guard #available(macOS 13.0, *) else { return }
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            NSLog("Cookie: Launch at Login toggle failed: \(error.localizedDescription)")
+        }
+    }
+
     @objc private func resetPosition() {
         UserDefaults.standard.set(false, forKey: PrefKey.hasPos)
         let origin = initialWindowOrigin(for: overlayWindow.frame.size)
@@ -465,6 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshMenusAndIcon() {
         updateStatusBarIcon(isListening: musicMonitor.isListening)
+        updateTooltips()
     }
 
     private func startAnimationLoop(interval: TimeInterval) {
@@ -482,7 +572,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         musicMonitor.update(now: now)
 
         let listening = musicMonitor.isListening
-        if lastIconListeningState != listening {
+        let nowPlaying = musicMonitor.nowPlayingDisplay
+        if lastIconListeningState != listening || lastNowPlayingDisplay != nowPlaying {
+            lastNowPlayingDisplay = nowPlaying
             refreshMenusAndIcon()
         }
 
@@ -503,7 +595,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             now: now,
             catWindowFrame: winFrame,
             cursorGlobalPos: cursor,
-            isListeningMusic: listening
+            isListeningMusic: listening,
+            audioEnergy: musicMonitor.beatEnergy,
+            beatPulse: musicMonitor.beatPulse,
+            beatRate: musicMonitor.beatRateRadPerSec
         )
 
         overlayWindow.catView.needsDisplay = true

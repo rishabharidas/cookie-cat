@@ -18,6 +18,9 @@ if CommandLine.arguments.contains("--render-preview") {
         ("shorthair", .shorthair, { p in
             p.headYaw = -0.20; p.headPitch = 0.05; p.eyeLookX = -0.2
         }),
+        ("british_blue", .britishBlue, { p in
+            p.headYaw = 0.15; p.headPitch = 0.05; p.eyeLookX = 0.15
+        }),
         ("look_left", .black, { p in
             p.headYaw = -0.80; p.headPitch = -0.50; p.eyeLookX = -0.6; p.eyeLookY = -0.5; p.musicLevel = 1.0
             p.particles = [

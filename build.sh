@@ -12,20 +12,35 @@ mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
 cp Resources/Info.plist "${CONTENTS_DIR}/Info.plist"
 
-swiftc \
-  -O \
-  -module-cache-path /tmp/swift-module-cache \
-  -framework AppKit \
-  -framework CoreGraphics \
-  -framework CoreAudio \
-  -framework AudioToolbox \
-  Sources/SkinSpec.swift \
-  Sources/MusicMonitor.swift \
-  Sources/CatPhysics.swift \
-  Sources/CatRenderer.swift \
-  Sources/OverlayWindow.swift \
-  Sources/AppDelegate.swift \
-  Sources/main.swift \
-  -o "${MACOS_DIR}/${APP_NAME}"
+SOURCES=(
+  Sources/SkinSpec.swift
+  Sources/MusicMonitor.swift
+  Sources/CatPhysics.swift
+  Sources/CatRenderer.swift
+  Sources/OverlayWindow.swift
+  Sources/AppDelegate.swift
+  Sources/main.swift
+)
+
+FRAMEWORKS=(
+  -framework AppKit
+  -framework CoreGraphics
+  -framework CoreAudio
+  -framework AudioToolbox
+  -framework ServiceManagement
+)
+
+X86_TARGET="x86_64-apple-macos15.0"
+if [[ "$(xcode-select -p 2>/dev/null)" == *"Xcode.app"* ]]; then
+  X86_TARGET="x86_64-apple-macos12.0"
+fi
+
+swiftc -O -target arm64-apple-macos12.0 -module-cache-path /tmp/swift-module-cache "${FRAMEWORKS[@]}" "${SOURCES[@]}" -o "${MACOS_DIR}/${APP_NAME}-arm64"
+swiftc -O -target "${X86_TARGET}" -module-cache-path /tmp/swift-module-cache "${FRAMEWORKS[@]}" "${SOURCES[@]}" -o "${MACOS_DIR}/${APP_NAME}-x86_64"
+
+lipo -create -output "${MACOS_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}-arm64" "${MACOS_DIR}/${APP_NAME}-x86_64"
+rm -f "${MACOS_DIR}/${APP_NAME}-arm64" "${MACOS_DIR}/${APP_NAME}-x86_64"
+
+codesign --force --deep --sign - "${APP_BUNDLE}" >/dev/null 2>&1 || true
 
 echo "Built ${APP_BUNDLE} successfully ($(du -sh "${MACOS_DIR}/${APP_NAME}" | cut -f1))."

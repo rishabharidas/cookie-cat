@@ -16,7 +16,7 @@ Cookie's 2.5D spherical dome head projection, unified C1-continuous cat silhouet
   - **Idle Behaviors**: Periodic paw-licking, ear-scratching, blinking, and sleepy `z` mode.
   - **Body-Only Drag & Physics**: Transparent areas pass clicks through; dragging Cookie from its body triggers pendulum sway and stretch physics.
 - **Customization (Right-Click Menu Bar Icon or Cat)**:
-  - **5 Skins**: Black Cat, Siamese, Silver Shorthair, Orange & White, White Cat.
+  - **5 Skins**: Black Cat, British Blue-Grey, Silver Shorthair, Orange & White, White Cat.
   - **6 Eye Colors**: Chartreuse Lime, Golden Amber, Sapphire Blue, Emerald Green, Ruby Rose, Amethyst Violet.
   - **5 Sizes**: `0.6x` to `1.5x`, plus Rim Border toggle (for dark backgrounds), High Frame Rate (60fps), and Click-Through mode (hold `⌥ Option` to drag).
 

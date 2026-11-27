@@ -13,30 +13,22 @@ final class CatRenderer {
     private static let catBlackPaw = NSColor(calibratedRed: 0.065, green: 0.065, blue: 0.085, alpha: 1.0)
     private static let catBlackCrease = NSColor(calibratedRed: 0.34, green: 0.48, blue: 0.40, alpha: 0.72) // signature mint-sage crease
     private static let whiskerDefault = NSColor(calibratedRed: 0.55, green: 0.56, blue: 0.60, alpha: 0.72)
-
-    private static let siameseCream = NSColor(calibratedRed: 0.945, green: 0.905, blue: 0.835, alpha: 1.0)
-    private static let siameseLatte = NSColor(calibratedRed: 0.885, green: 0.825, blue: 0.735, alpha: 1.0)
-    private static let siamesePoint = NSColor(calibratedRed: 0.22, green: 0.16, blue: 0.135, alpha: 1.0)
-    private static let siameseMocha = NSColor(calibratedRed: 0.45, green: 0.34, blue: 0.28, alpha: 1.0)
-    private static let siameseInnerEar = NSColor(calibratedRed: 0.50, green: 0.36, blue: 0.34, alpha: 1.0)
-    private static let siameseOutline = NSColor(calibratedRed: 0.55, green: 0.45, blue: 0.36, alpha: 0.35)
-    private static let siameseCrease = NSColor(calibratedRed: 0.38, green: 0.28, blue: 0.24, alpha: 0.55)
-    private static let siameseWhisker = NSColor(calibratedRed: 0.32, green: 0.26, blue: 0.22, alpha: 0.70)
+    private static let lightOutline = NSColor(calibratedRed: 0.55, green: 0.45, blue: 0.36, alpha: 0.35)
 
     private func bodyColor(_ skin: SkinSpec) -> NSColor {
         switch skin.id {
         case .black: return Self.catBlack
-        case .siamese: return Self.siameseCream
-        case .shorthair: return NSColor(calibratedRed: 0.96, green: 0.955, blue: 0.94, alpha: 1.0) // White base for dual-color pattern
+        case .britishBlue: return NSColor(calibratedRed: 0.61, green: 0.645, blue: 0.69, alpha: 1.0)
+        case .shorthair: return NSColor(calibratedRed: 0.96, green: 0.955, blue: 0.94, alpha: 1.0)
         case .white: return NSColor(calibratedRed: 0.97, green: 0.97, blue: 0.98, alpha: 1.0)
-        case .orangeWhite: return NSColor(calibratedRed: 0.965, green: 0.955, blue: 0.935, alpha: 1.0) // White base for dual-color pattern
+        case .orangeWhite: return NSColor(calibratedRed: 0.965, green: 0.955, blue: 0.935, alpha: 1.0)
         }
     }
 
     private func earTailColor(_ skin: SkinSpec) -> NSColor {
         switch skin.id {
         case .black: return Self.catBlack
-        case .siamese: return Self.siamesePoint
+        case .britishBlue: return NSColor(calibratedRed: 0.385, green: 0.415, blue: 0.455, alpha: 1.0)
         case .shorthair: return NSColor(calibratedRed: 0.68, green: 0.70, blue: 0.73, alpha: 1.0)
         case .white: return NSColor(calibratedRed: 0.95, green: 0.95, blue: 0.97, alpha: 1.0)
         case .orangeWhite: return NSColor(calibratedRed: 0.88, green: 0.68, blue: 0.46, alpha: 1.0)
@@ -46,7 +38,7 @@ final class CatRenderer {
     private func pawColor(_ skin: SkinSpec) -> NSColor {
         switch skin.id {
         case .black: return Self.catBlackPaw
-        case .siamese: return Self.siamesePoint
+        case .britishBlue: return NSColor(calibratedRed: 0.64, green: 0.675, blue: 0.72, alpha: 1.0)
         case .shorthair: return NSColor(calibratedRed: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
         case .white: return NSColor(calibratedRed: 0.99, green: 0.99, blue: 1.0, alpha: 1.0)
         case .orangeWhite: return NSColor(calibratedRed: 0.98, green: 0.97, blue: 0.95, alpha: 1.0)
@@ -56,7 +48,7 @@ final class CatRenderer {
     private func creaseColor(_ skin: SkinSpec) -> NSColor {
         switch skin.id {
         case .black: return Self.catBlackCrease
-        case .siamese: return Self.siameseCrease
+        case .britishBlue: return NSColor(calibratedRed: 0.298, green: 0.329, blue: 0.369, alpha: 0.52) // #4C545E85
         case .shorthair: return NSColor(calibratedRed: 0.36, green: 0.38, blue: 0.42, alpha: 0.65)
         case .white: return NSColor(calibratedRed: 0.62, green: 0.62, blue: 0.68, alpha: 0.65)
         case .orangeWhite: return NSColor(calibratedRed: 0.52, green: 0.34, blue: 0.18, alpha: 0.55)
@@ -111,11 +103,10 @@ final class CatRenderer {
         let bodyTilt = physics.headYaw * 0.06
             + sin(physics.musicBeatPhase * 0.5) * 0.025 * physics.musicLevel
             + physics.dragSwayAngle
-        let siameseLift: CGFloat = (skin.id == .siamese) ? -3.0 : 0.0
 
         let headCenter = CGPoint(
             x: seatX + bodyTilt * 36.0 + physics.headYaw * 7.5 - physics.sleepLevel * 16.0,
-            y: 122.0 + siameseLift + physics.headBobY + physics.headPitch * 4.8 + breath * 1.1
+            y: 122.0 + physics.headBobY + physics.headPitch * 4.8 + breath * 1.1
         )
 
         // 1. Tail (behind body when awake; wraps around front when curled into sleep donut!)
@@ -195,7 +186,7 @@ final class CatRenderer {
         let c2   = CGPoint(x: lerp(awakeC2.x, sleepC2.x, sleep),     y: lerp(awakeC2.y, sleepC2.y, sleep))
         let tip  = CGPoint(x: lerp(awakeTip.x, sleepTip.x, sleep),   y: lerp(awakeTip.y, sleepTip.y, sleep))
 
-        let width: CGFloat = (skin.id == .siamese ? 9.5 : 11.0)
+        let width: CGFloat = 11.0 * skin.shape.tailThickness
         ctx.saveGState()
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
@@ -208,7 +199,8 @@ final class CatRenderer {
             ctx.strokePath()
         }
 
-        ctx.setStrokeColor(earTailColor(skin).cgColor)
+        let tailColor = skin.id == .britishBlue ? skin.palette.earOuter : earTailColor(skin).cgColor
+        ctx.setStrokeColor(tailColor)
         ctx.setLineWidth(width)
         ctx.move(to: root)
         ctx.addCurve(to: tip, control1: c1, control2: c2)
@@ -246,26 +238,27 @@ final class CatRenderer {
             return CGPoint(x: seatX + rx * cB - ry * sB, y: seatY + rx * sB + ry * cB)
         }
 
-        let isSiamese = (skin.id == .siamese)
         let sleep = physics.sleepLevel
+        let cheekScale = skin.shape.cheekFullness
+        let bodyScale = skin.shape.bodyWidth
         let cheekShift = yaw * 3.0
         let crownDrop = pitch * 2.0
-        let cheekHalfW: CGFloat = 42.5
-        let crownCtrlW: CGFloat = isSiamese ? 25.0 : 26.0
-        let crownBaseY: CGFloat = isSiamese ? -29.5 : -30.0
-        let cheekY: CGFloat = isSiamese ? 6.5 : 5.0
-        let neckPinchXRight: CGFloat = (isSiamese ? 6.5 : 2.5) - sleep * 14.0
-        let neckPinchXLeft: CGFloat = (isSiamese ? 6.5 : 2.5) - sleep * 3.5
-        let neckCtrlY: CGFloat = (isSiamese ? 27.5 : 24.0) - sleep * 22.0
-        let hipHalfW: CGFloat = (isSiamese ? 44.5 : 49.0) + sleep * 5.0
-        let lHipHalfW: CGFloat = (isSiamese ? 44.5 : 49.0) - sleep * 6.0
-        let waistCtrlW: CGFloat = (isSiamese ? 41.0 : 51.5) + sleep * 8.0
-        let lWaistCtrlW: CGFloat = (isSiamese ? 41.0 : 51.5) - sleep * 6.0
-        let waistCtrlY: CGFloat = (isSiamese ? -50.0 : -48.0) - sleep * 4.0
-        let lWaistCtrlY: CGFloat = (isSiamese ? -50.0 : -48.0) + sleep * 34.0
-        let botOuterW: CGFloat = (isSiamese ? 42.0 : 47.0) + sleep * 8.0
-        let botInnerW: CGFloat = (isSiamese ? 32.0 : 36.0) + sleep * 10.0
-        let botHalfW: CGFloat = (isSiamese ? 22.0 : 24.0) + sleep * 12.0
+        let cheekHalfW: CGFloat = 42.5 * cheekScale
+        let crownCtrlW: CGFloat = 26.0
+        let crownBaseY: CGFloat = -30.0
+        let cheekY: CGFloat = 5.0
+        let neckPinchXRight: CGFloat = 2.5 - sleep * 14.0
+        let neckPinchXLeft: CGFloat = 2.5 - sleep * 3.5
+        let neckCtrlY: CGFloat = 24.0 - sleep * 22.0
+        let hipHalfW: CGFloat = 49.0 * bodyScale + sleep * 5.0
+        let lHipHalfW: CGFloat = 49.0 * bodyScale - sleep * 6.0
+        let waistCtrlW: CGFloat = 51.5 * bodyScale + sleep * 8.0
+        let lWaistCtrlW: CGFloat = 51.5 * bodyScale - sleep * 6.0
+        let waistCtrlY: CGFloat = -48.0 - sleep * 4.0
+        let lWaistCtrlY: CGFloat = -48.0 + sleep * 34.0
+        let botOuterW: CGFloat = 47.0 * bodyScale + sleep * 8.0
+        let botInnerW: CGFloat = 36.0 * bodyScale + sleep * 10.0
+        let botHalfW: CGFloat = 24.0 * bodyScale + sleep * 12.0
         let leftCheekX: CGFloat = -cheekHalfW + cheekShift * 0.4
         let rightCheekX: CGFloat = cheekHalfW + cheekShift * 0.4
 
@@ -277,7 +270,7 @@ final class CatRenderer {
         let lHip   = B(-lHipHalfW, -14)
         let lCheek = H(leftCheekX, cheekY)
 
-        let cheekCtrlTopY: CGFloat = isSiamese ? -13.0 : -14.0
+        let cheekCtrlTopY: CGFloat = -14.0
         let path = CGMutablePath()
         path.move(to: crown)
         path.addCurve(to: rCheek, control1: H(crownCtrlW + cheekShift * 0.3, crownBaseY + crownDrop), control2: H(rightCheekX + 1.5, cheekCtrlTopY))
@@ -290,11 +283,10 @@ final class CatRenderer {
         path.closeSubpath()
 
         ctx.saveGState()
-        if !isSiamese {
-            ctx.setFillColor(bodyColor(skin).cgColor)
-            ctx.addPath(path)
-            ctx.fillPath()
-            if skin.id == .orangeWhite || skin.id == .shorthair {
+        ctx.setFillColor(bodyColor(skin).cgColor)
+        ctx.addPath(path)
+        ctx.fillPath()
+        if skin.id == .orangeWhite || skin.id == .shorthair {
                 ctx.saveGState()
                 ctx.addPath(path)
                 ctx.clip()
@@ -358,33 +350,47 @@ final class CatRenderer {
                 }
 
                 ctx.restoreGState()
-            }
-        } else {
+        } else if skin.id == .britishBlue {
+            ctx.saveGState()
             ctx.addPath(path)
             ctx.clip()
-            let cs = CGColorSpaceCreateDeviceRGB()
-            let bodyColors = [Self.siameseCream.cgColor, Self.siameseLatte.cgColor] as CFArray
-            if let grad = CGGradient(colorsSpace: cs, colors: bodyColors, locations: [0.15, 1.0]) {
-                ctx.drawLinearGradient(grad, start: CGPoint(x: seatX, y: headCenter.y - 34), end: CGPoint(x: seatX, y: seatY + 18), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-            }
+
             let yawRad = yaw * 0.50, pitchRad = pitch * 0.36
-            ctx.saveGState()
-            ctx.translateBy(x: headCenter.x, y: headCenter.y)
-            ctx.rotate(by: hTilt)
-            let maskCenter = projectHead3D(x: 0, y: 3.0, z: 27.0, yawRad: yawRad, pitchRad: pitchRad).pt
-            let maskScaleX = max(0.76, cos(yawRad * 0.7))
-            let maskScaleY = max(0.82, cos(pitchRad * 0.7))
-            ctx.translateBy(x: maskCenter.x, y: maskCenter.y)
-            ctx.scaleBy(x: maskScaleX * 1.24, y: maskScaleY * 0.88)
-            let maskColors = [
-                Self.siamesePoint.cgColor,
-                Self.siamesePoint.withAlphaComponent(0.92).cgColor,
-                Self.siameseMocha.withAlphaComponent(0.62).cgColor,
-                Self.siameseMocha.withAlphaComponent(0.0).cgColor
-            ] as CFArray
-            if let maskGrad = CGGradient(colorsSpace: cs, colors: maskColors, locations: [0.0, 0.42, 0.74, 1.0]) {
-                ctx.drawRadialGradient(maskGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 31.5, options: [.drawsBeforeStartLocation])
+            let patchColor = earTailColor(skin).cgColor
+
+            func headPt(_ lx: CGFloat, _ ly: CGFloat) -> CGPoint {
+                let depth = 29.6 * sqrt(max(0, 1 - pow(lx / 46.0, 2) - pow(ly / 40.0, 2)))
+                let p = projectHead3D(x: lx, y: ly, z: depth, yawRad: yawRad, pitchRad: pitchRad).pt
+                return CGPoint(x: headCenter.x + p.x * cH - p.y * sH, y: headCenter.y + p.x * sH + p.y * cH)
             }
+
+            // 1. Plush British Bicolor hood/cheek mask leaving a soft rounded muzzle & chin bib
+            let hood = CGMutablePath()
+            hood.move(to: headPt(-52, -40))
+            hood.addLine(to: headPt(52, -40))
+            hood.addLine(to: headPt(52, 16))
+            hood.addQuadCurve(to: headPt(22, 6), control: headPt(36, 14))
+            hood.addQuadCurve(to: headPt(0, -1), control: headPt(11, 0))
+            hood.addQuadCurve(to: headPt(-22, 6), control: headPt(-11, 0))
+            hood.addQuadCurve(to: headPt(-52, 16), control: headPt(-36, 14))
+            hood.closeSubpath()
+            ctx.setFillColor(patchColor)
+            ctx.addPath(hood)
+            ctx.fillPath()
+
+            // 2. Plush shoulder/flank saddle wrap leaving a soft oval chest & belly bib
+            for sign in [-1.0, 1.0] as [CGFloat] {
+                let flank = CGMutablePath()
+                flank.move(to: B(sign * 56, -54))
+                flank.addQuadCurve(to: B(sign * 25, -24), control: B(sign * 34, -42))
+                flank.addQuadCurve(to: B(sign * 29, 10), control: B(sign * 19, -5))
+                flank.addLine(to: B(sign * 56, 14))
+                flank.closeSubpath()
+                ctx.setFillColor(patchColor)
+                ctx.addPath(flank)
+                ctx.fillPath()
+            }
+
             ctx.restoreGState()
         }
         ctx.restoreGState()
@@ -396,9 +402,9 @@ final class CatRenderer {
             ctx.addPath(path)
             ctx.strokePath()
             ctx.restoreGState()
-        } else if isSiamese || skin.id == .white {
+        } else if skin.id == .white {
             ctx.saveGState()
-            ctx.setStrokeColor(Self.siameseOutline.cgColor)
+            ctx.setStrokeColor(Self.lightOutline.cgColor)
             ctx.setLineWidth(1.0)
             ctx.addPath(path)
             ctx.strokePath()
@@ -414,20 +420,20 @@ final class CatRenderer {
             ctx.scaleBy(x: sx, y: sy)
             ctx.setFillColor(pawColor(skin).cgColor)
 
-            let leftHindX: CGFloat = isSiamese ? -31.0 : -35.0
-            let hindW: CGFloat = isSiamese ? 15.5 : 17.0
-            let rightHindX: CGFloat = isSiamese ? 15.5 : 18.0
-            let leftHindY: CGFloat = isSiamese ? 3.5 : 3.0
-            let leftHindH: CGFloat = isSiamese ? 12.0 : 11.0
-            let rightHindY: CGFloat = (skin.id == .black || isSiamese) ? 4.5 : 3.0
-            let rightHindH: CGFloat = (skin.id == .black || isSiamese) ? 12.5 : 11.0
+            let leftHindX: CGFloat = -35.0
+            let hindW: CGFloat = 17.0
+            let rightHindX: CGFloat = 18.0
+            let leftHindY: CGFloat = 3.0
+            let leftHindH: CGFloat = 11.0
+            let rightHindY: CGFloat = skin.id == .black ? 4.5 : 3.0
+            let rightHindH: CGFloat = skin.id == .black ? 12.5 : 11.0
 
             ctx.fillEllipse(in: CGRect(x: leftHindX, y: leftHindY, width: hindW, height: leftHindH))
             if physics.idleAction != .scratching || physics.idleActionBlend < 0.02 {
                 ctx.fillEllipse(in: CGRect(x: rightHindX, y: rightHindY, width: hindW, height: rightHindH))
             }
 
-            let rimColor = isSiamese ? Self.siameseCream.withAlphaComponent(0.55) : creaseColor(skin).withAlphaComponent(0.58)
+            let rimColor = creaseColor(skin).withAlphaComponent(0.58)
             ctx.setStrokeColor(rimColor.cgColor)
             ctx.setLineWidth(1.3)
             ctx.setLineCap(.round)
@@ -471,18 +477,17 @@ final class CatRenderer {
         showBorder: Bool
     ) {
         let sign: CGFloat = isLeft ? -1.0 : 1.0
-        let isSiamese = (skin.id == .siamese)
-        let foldAngle = sign * ((isSiamese ? 0.14 : 0.06) + fold * 0.34) + twitch
-        let earLen: CGFloat = isSiamese ? 29.5 : 32.0
+        let foldAngle = sign * (0.06 + fold * 0.34) + twitch
+        let earLen: CGFloat = 32.0 * skin.shape.earSize
 
         let tipDx = sin(foldAngle) * earLen
         let tipDy = -cos(foldAngle) * earLen
 
-        let innerBase3D = projectHead3D(x: sign * (isSiamese ? 10.0 : 9.0), y: isSiamese ? -16.5 : -16.0, z: 0.0, yawRad: yawRad, pitchRad: pitchRad).pt
-        let outerBase3D = projectHead3D(x: sign * (isSiamese ? 35.5 : 35.0), y: isSiamese ? -4.5 : -5.0, z: -2.0, yawRad: yawRad, pitchRad: pitchRad).pt
-        let tip3D       = projectHead3D(x: sign * (isSiamese ? 25.0 : 24.5) + tipDx, y: (isSiamese ? -18.5 : -20.0) + tipDy, z: -3.0, yawRad: yawRad, pitchRad: pitchRad).pt
+        let innerBase3D = projectHead3D(x: sign * 9.0, y: -16.0, z: 0.0, yawRad: yawRad, pitchRad: pitchRad).pt
+        let outerBase3D = projectHead3D(x: sign * 35.0, y: -5.0, z: -2.0, yawRad: yawRad, pitchRad: pitchRad).pt
+        let tip3D       = projectHead3D(x: sign * 24.5 + tipDx, y: -20.0 + tipDy, z: -3.0, yawRad: yawRad, pitchRad: pitchRad).pt
 
-        let tipSpread: CGFloat = isSiamese ? 4.2 : 3.8
+        let tipSpread: CGFloat = 3.8
         let tipLeft  = CGPoint(x: tip3D.x - sign * tipSpread, y: tip3D.y + 2.8)
         let tipRight = CGPoint(x: tip3D.x + sign * tipSpread, y: tip3D.y + 3.2)
 
@@ -504,7 +509,7 @@ final class CatRenderer {
             ctx.strokePath()
         }
 
-        if isSiamese {
+        if skin.id == .britishBlue {
             let inI = CGPoint(x: innerBase3D.x + (tip3D.x - innerBase3D.x) * 0.24 + sign * 3.0, y: innerBase3D.y + (tip3D.y - innerBase3D.y) * 0.16)
             let outI = CGPoint(x: outerBase3D.x + (tip3D.x - outerBase3D.x) * 0.20 - sign * 3.8, y: outerBase3D.y + (tip3D.y - outerBase3D.y) * 0.18)
             let tipI = CGPoint(x: (innerBase3D.x + outerBase3D.x) * 0.16 + tip3D.x * 0.68, y: (innerBase3D.y + outerBase3D.y) * 0.14 + tip3D.y * 0.72 + 2.5)
@@ -513,7 +518,7 @@ final class CatRenderer {
             inner.addQuadCurve(to: tipI, control: CGPoint(x: (inI.x + tipI.x) * 0.5 - sign * 0.8, y: (inI.y + tipI.y) * 0.5))
             inner.addQuadCurve(to: outI, control: CGPoint(x: (outI.x + tipI.x) * 0.5 + sign * 1.2, y: (outI.y + tipI.y) * 0.5))
             inner.closeSubpath()
-            ctx.setFillColor(Self.siameseInnerEar.cgColor)
+            ctx.setFillColor(skin.palette.earInner)
             ctx.addPath(inner)
             ctx.fillPath()
         }
@@ -612,9 +617,8 @@ final class CatRenderer {
         let hunt = physics.huntingLevel
         ctx.rotate(by: sign * (0.06 * (1.0 - hunt * 0.6)))
 
-        let isSiameseEye = (skin.id == .siamese)
-        let rx: CGFloat = (isSiameseEye ? 11.4 + hunt * 1.3 : 12.0 + hunt * 1.1)
-        let ry: CGFloat = (isSiameseEye ? 9.8 + hunt * 2.0 : 10.8 + hunt * 1.8)
+        let rx: CGFloat = 12.0 + hunt * 1.1
+        let ry: CGFloat = 10.8 + hunt * 1.8
         let eyeRect = CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2)
 
         ctx.saveGState()
@@ -660,8 +664,7 @@ final class CatRenderer {
     private func drawWhiskers3D(in ctx: CGContext, yawRad: CGFloat, pitchRad: CGFloat, physics: CatPhysics, skin: SkinSpec) {
         let wiggle = sin(physics.breathPhase * 2.0) * (physics.pettingLevel * 1.2)
         ctx.saveGState()
-        let wColor = (skin.id == .siamese ? Self.siameseWhisker : Self.whiskerDefault).withAlphaComponent(0.68)
-        ctx.setStrokeColor(wColor.cgColor)
+        ctx.setStrokeColor(skin.palette.whisker)
         ctx.setLineWidth(1.0)
         ctx.setLineCap(.round)
 
@@ -686,10 +689,9 @@ final class CatRenderer {
     // MARK: - Front Paws (KuroCat Idle Sitting)
 
     private func drawFrontPaws(in ctx: CGContext, seatX: CGFloat, seatY: CGFloat, bodyTilt: CGFloat, physics: CatPhysics, skin: SkinSpec, showBorder: Bool) {
-        let isSiamese = (skin.id == .siamese)
-        let idleTopY: CGFloat = isSiamese ? -31 : -30
-        let idleTopX: CGFloat = isSiamese ? 16.5 : 18.0
-        let idleBotX: CGFloat = isSiamese ? 15.0 : 16.0
+        let idleTopY: CGFloat = -30
+        let idleTopX: CGFloat = 18.0
+        let idleBotX: CGFloat = 16.0
         let dangleY: CGFloat = physics.dragStretch * 22.0
         let chestParallax: CGFloat = physics.headYaw * 3.5
 

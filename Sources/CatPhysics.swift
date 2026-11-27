@@ -121,7 +121,10 @@ final class CatPhysics {
         now: TimeInterval,
         catWindowFrame: NSRect,
         cursorGlobalPos: NSPoint,
-        isListeningMusic: Bool
+        isListeningMusic: Bool,
+        audioEnergy: CGFloat = 0,
+        beatPulse: CGFloat = 0,
+        beatRate: CGFloat = 6.2
     ) {
         let rawDt = now - lastUpdateTime
         lastUpdateTime = now
@@ -210,8 +213,9 @@ final class CatPhysics {
 
         let gazeWeight = (1.0 - sleepLevel * 0.95) * (1.0 - idleActionBlend) * (1.0 - yawnLevel)
         var targetYaw = normX * gazeWeight - sleepLevel * 0.15
-        var targetPitch = (normY * gazeWeight) + (sleepLevel * 0.22) - (yawnLevel * 0.28)
-        var targetTilt = (normX * 0.10 * gazeWeight) + sin(musicBeatPhase * 0.5) * 0.06 * musicLevel - (sleepLevel * 0.16)
+        let tiltAmp = 0.055 + audioEnergy * 0.045
+        var targetTilt = (normX * 0.10 * gazeWeight) + sin(musicBeatPhase * 0.5) * tiltAmp * musicLevel - (sleepLevel * 0.16)
+        var targetPitch = (normY * gazeWeight) + (sleepLevel * 0.22) - (yawnLevel * 0.28) + beatPulse * 0.045 * musicLevel
 
         if idleActionBlend > 0.01 {
             switch idleAction {
@@ -245,14 +249,15 @@ final class CatPhysics {
 
         // 3. Breathing, tail wave, and music beat
         breathPhase += dt * (sleepLevel > 0.5 ? 1.4 : 2.2)
-        tailPhase += dt * (1.9 + huntingLevel * 4.2 + musicLevel * 1.6)
+        tailPhase += dt * (1.9 + huntingLevel * 4.2 + musicLevel * (1.4 + audioEnergy * 1.4))
         if musicLevel > 0.05 {
-            musicBeatPhase += dt * 6.2
+            musicBeatPhase += dt * beatRate
         }
 
         let breathSquash = sin(breathPhase) * 0.012
         let huntCrouch = -huntingLevel * 0.042
-        let musicBob = (0.5 - 0.5 * cos(musicBeatPhase)) * 0.014 * musicLevel
+        let beatAmp = 0.012 + audioEnergy * 0.018 + beatPulse * 0.018
+        let musicBob = (0.5 - 0.5 * cos(musicBeatPhase)) * beatAmp * musicLevel
         let sleepLoaf = sleepLevel * 0.32
         let yawnStretch = yawnLevel * 0.05
         dragStretch = smoothLerp(dragStretch, isDragging ? 0.14 : 0.0, speed: 10.0, dt: dt)
