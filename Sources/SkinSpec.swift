@@ -1,10 +1,10 @@
 import AppKit
 import CoreGraphics
 
-/// Built-in cat skins matching KuroCat's roster, with Black Cat as default.
+/// Built-in cat skins, with Black Cat as default.
 enum CatSkinId: String, CaseIterable {
     case black = "black"
-    case siamese = "siamese"
+    case britishBlue = "britishBlue"
     case shorthair = "shorthair"
     case orangeWhite = "orangeWhite"
     case white = "white"
@@ -12,7 +12,7 @@ enum CatSkinId: String, CaseIterable {
     var displayName: String {
         switch self {
         case .black: return "Black Cat"
-        case .siamese: return "Siamese"
+        case .britishBlue: return "British Blue-Grey"
         case .shorthair: return "Silver Shorthair"
         case .orangeWhite: return "Orange & White"
         case .white: return "White Cat"
@@ -128,32 +128,40 @@ struct SkinSpec {
                 shape: defaultShape
             )
 
-        case .siamese:
+        case .britishBlue:
+            // Adapted from kurocat black-grey.kurocat ("英短蓝猫" / British Shorthair Blue)
             return SkinSpec(
-                id: .siamese,
+                id: .britishBlue,
                 palette: CatPalette(
-                    outline: rgba(0.45, 0.36, 0.30, 0.55),
-                    bodyFill: rgba(0.945, 0.905, 0.835, 1.0),
-                    bodyShade: rgba(0.885, 0.825, 0.735, 1.0),
-                    headFill: rgba(0.945, 0.905, 0.835, 1.0),
-                    chestFill: rgba(0.96, 0.92, 0.86, 1.0),
-                    earOuter: rgba(0.22, 0.16, 0.135, 1.0),
-                    earInner: rgba(0.50, 0.36, 0.34, 1.0),
-                    muzzleFill: rgba(0.22, 0.16, 0.135, 0.90),
-                    nose: rgba(0.14, 0.09, 0.08, 1.0),
-                    mouth: rgba(0.78, 0.66, 0.56, 0.55),
-                    eyeSclera: rgba(0.98, 0.98, 1.0, 1.0),
-                    eyeIris: rgba(0.56, 0.77, 0.90, 1.0),
-                    eyePupil: rgba(0.06, 0.06, 0.09, 1.0),
-                    blush: rgba(0.92, 0.50, 0.56, 0.40),
-                    whisker: rgba(0.32, 0.26, 0.22, 0.70),
-                    pawPad: rgba(0.45, 0.34, 0.32, 1.0),
-                    headphoneBand: rgba(0.28, 0.24, 0.22, 1.0),
-                    headphoneCup: rgba(0.36, 0.30, 0.26, 1.0),
-                    headphoneCushion: rgba(0.18, 0.15, 0.14, 1.0),
-                    headphoneAccent: rgba(0.45, 0.80, 1.0, 1.0)
+                    outline: rgba(0.24, 0.27, 0.31, 0.85),
+                    bodyFill: hex(0x747D88),
+                    bodyShade: hex(0x5E6670),
+                    headFill: hex(0x747D88),
+                    chestFill: hex(0x87909B),
+                    earOuter: hex(0x666E78),
+                    earInner: hex(0xA3989D),
+                    muzzleFill: nil,
+                    nose: hex(0x4D5259),
+                    mouth: hex(0x4B5056),
+                    eyeSclera: rgba(0.98, 0.98, 0.99, 1.0),
+                    eyeIris: hex(0xE5A63B),
+                    eyePupil: rgba(0.06, 0.06, 0.08, 1.0),
+                    blush: rgba(0.88, 0.56, 0.62, 0.35),
+                    whisker: hex(0xDCE2E8, alpha: 0.66),
+                    pawPad: hex(0x5C5458),
+                    headphoneBand: rgba(0.24, 0.26, 0.31, 1.0),
+                    headphoneCup: rgba(0.16, 0.18, 0.22, 1.0),
+                    headphoneCushion: rgba(0.32, 0.35, 0.40, 1.0),
+                    headphoneAccent: hex(0xE5A63B)
                 ),
-                shape: defaultShape
+                shape: CatShape(
+                    bodyWidth: 1.15,
+                    headScale: 1.0,
+                    earSize: 0.90,
+                    tailLength: 1.0,
+                    tailThickness: 1.22,
+                    cheekFullness: 1.14
+                )
             )
 
         case .shorthair:
@@ -245,4 +253,11 @@ struct SkinSpec {
 
 private func rgba(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat) -> CGColor {
     CGColor(red: r, green: g, blue: b, alpha: a)
+}
+
+private func hex(_ value: Int, alpha: CGFloat = 1.0) -> CGColor {
+    let r = CGFloat((value >> 16) & 0xFF) / 255.0
+    let g = CGFloat((value >> 8) & 0xFF) / 255.0
+    let b = CGFloat(value & 0xFF) / 255.0
+    return CGColor(red: r, green: g, blue: b, alpha: alpha)
 }

@@ -18,8 +18,11 @@ if CommandLine.arguments.contains("--render-preview") {
         ("shorthair", .shorthair, { p in
             p.headYaw = -0.20; p.headPitch = 0.05; p.eyeLookX = -0.2
         }),
+        ("british_blue", .britishBlue, { p in
+            p.headYaw = 0.15; p.headPitch = 0.05; p.eyeLookX = 0.15
+        }),
         ("look_left", .black, { p in
-            p.headYaw = -0.85; p.headPitch = 0.35; p.eyeLookX = -0.6; p.musicLevel = 1.0
+            p.headYaw = -0.80; p.headPitch = -0.50; p.eyeLookX = -0.6; p.eyeLookY = -0.5; p.musicLevel = 1.0
             p.particles = [
                 FloatingParticle(kind: .noteDouble, x: 215, y: 78, vx: 0, vy: 0, age: 0.4, lifetime: 1.6, scale: 1.1, phase: 0, color: CGColor(red: 0.4, green: 0.85, blue: 1.0, alpha: 1.0)),
                 FloatingParticle(kind: .noteSingle, x: 205, y: 60, vx: 0, vy: 0, age: 0.6, lifetime: 1.6, scale: 1.0, phase: 0, color: CGColor(red: 1.0, green: 0.52, blue: 0.76, alpha: 1.0)),
@@ -27,6 +30,21 @@ if CommandLine.arguments.contains("--render-preview") {
         }),
         ("look_right", .black, { p in
             p.headYaw = 0.85; p.headPitch = 0.35; p.eyeLookX = 0.6; p.musicLevel = 1.0
+        }),
+        ("yawning", .black, { p in
+            p.yawnLevel = 1.0
+            p.headPitch = -0.25
+        }),
+        ("sleeping", .black, { p in
+            p.sleepLevel = 1.0
+            p.squashY = 0.68
+            p.headBobY = 47.5
+            p.headYaw = -0.15
+            p.headTilt = -0.16
+            p.headPitch = 0.22
+            p.particles = [
+                FloatingParticle(kind: .sleepZ, x: 175, y: 122, vx: 0, vy: 0, age: 0.4, lifetime: 2.0, scale: 1.0, phase: 0, color: CGColor(red: 0.78, green: 0.86, blue: 1.0, alpha: 1.0)),
+            ]
         }),
     ]
 
