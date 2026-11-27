@@ -114,12 +114,14 @@ final class CatRenderer {
         let siameseLift: CGFloat = (skin.id == .siamese) ? -3.0 : 0.0
 
         let headCenter = CGPoint(
-            x: seatX + bodyTilt * 36.0 + physics.headYaw * 7.5,
+            x: seatX + bodyTilt * 36.0 + physics.headYaw * 7.5 - physics.sleepLevel * 16.0,
             y: 122.0 + siameseLift + physics.headBobY + physics.headPitch * 4.8 + breath * 1.1
         )
 
-        // 1. Tail (behind body)
-        drawTail(in: ctx, seatX: seatX, seatY: seatY, physics: physics, skin: skin, showBorder: showBorder)
+        // 1. Tail (behind body when awake; wraps around front when curled into sleep donut!)
+        if physics.sleepLevel <= 0.45 {
+            drawTail(in: ctx, seatX: seatX, seatY: seatY, physics: physics, skin: skin, showBorder: showBorder)
+        }
 
         // 2. 3D-Projected Ears (behind unified silhouette)
         drawEarsLayer(in: ctx, center: headCenter, physics: physics, skin: skin, showBorder: showBorder)
@@ -140,12 +142,22 @@ final class CatRenderer {
         // 4. 2.5D Turning Head Features: Luminous Eyes & Whiskers
         drawHeadFeatures(in: ctx, center: headCenter, physics: physics, skin: skin, eyeTheme: eyeTheme)
 
-        // 5. Front Paws (Idle Sitting, locked to bodyTilt & squashY physics)
-        drawFrontPaws(in: ctx, seatX: seatX, seatY: seatY, bodyTilt: bodyTilt, physics: physics, skin: skin, showBorder: showBorder)
+        // 5. Front Paws (Idle Sitting, locked to bodyTilt & squashY physics; tucked away in donut sleep)
+        if physics.sleepLevel < 0.70 {
+            ctx.saveGState()
+            ctx.setAlpha(max(0.0, 1.0 - physics.sleepLevel * 1.5))
+            drawFrontPaws(in: ctx, seatX: seatX, seatY: seatY, bodyTilt: bodyTilt, physics: physics, skin: skin, showBorder: showBorder)
+            ctx.restoreGState()
+        }
+
+        // Wrapped donut tail drawn in front of lower body when curled up sleeping
+        if physics.sleepLevel > 0.45 {
+            drawTail(in: ctx, seatX: seatX, seatY: seatY, physics: physics, skin: skin, showBorder: showBorder)
+        }
 
         // 6. Fitted Wireless Headphones when listening to music
         if physics.musicLevel > 0.02 {
-            drawWirelessHeadphones(in: ctx, center: headCenter, physics: physics, skin: skin)
+            drawWirelessHeadphones(in: ctx, center: headCenter, physics: physics, skin: skin, eyeTheme: eyeTheme)
         }
 
         // 7. Idle limb actions (paw-licking / ear-scratching)
@@ -162,14 +174,26 @@ final class CatRenderer {
     private func drawTail(in ctx: CGContext, seatX: CGFloat, seatY: CGFloat, physics: CatPhysics, skin: SkinSpec, showBorder: Bool) {
         let p = physics.tailPhase
         let hunt = physics.huntingLevel
-        let wag1 = sin(p) * (8.0 + hunt * 5.5)
-        let wag2 = cos(p * 1.3) * (6.0 + hunt * 4.5)
+        let sleep = physics.sleepLevel
+        let wag1 = sin(p) * (8.0 + hunt * 5.5) * (1.0 - sleep * 0.85)
+        let wag2 = cos(p * 1.3) * (6.0 + hunt * 4.5) * (1.0 - sleep * 0.85)
         let huntDrop = hunt * 14.0
 
-        let root = CGPoint(x: seatX + 34, y: seatY - 6)
-        let c1 = CGPoint(x: seatX + 64, y: seatY + 2 + wag1 * 0.35 + huntDrop * 0.4)
-        let c2 = CGPoint(x: seatX + 66 + wag2 * 0.4, y: seatY - 26 + wag1 * 0.7 + huntDrop)
-        let tip = CGPoint(x: seatX + 91 + wag2 * 0.5, y: seatY - 30 + wag1 * 0.85 + huntDrop)
+        // Awake sweeping tail vs. curled-up donut tail wrapped snugly around the front/chin
+        let awakeRoot = CGPoint(x: seatX + 34, y: seatY - 6)
+        let awakeC1   = CGPoint(x: seatX + 64, y: seatY + 2 + wag1 * 0.35 + huntDrop * 0.4)
+        let awakeC2   = CGPoint(x: seatX + 66 + wag2 * 0.4, y: seatY - 26 + wag1 * 0.7 + huntDrop)
+        let awakeTip  = CGPoint(x: seatX + 91 + wag2 * 0.5, y: seatY - 30 + wag1 * 0.85 + huntDrop)
+
+        let sleepRoot = CGPoint(x: seatX + 52, y: seatY - 10)
+        let sleepC1   = CGPoint(x: seatX + 66, y: seatY + 18)
+        let sleepC2   = CGPoint(x: seatX + 14, y: seatY + 24)
+        let sleepTip  = CGPoint(x: seatX - 28, y: seatY + 12)
+
+        let root = CGPoint(x: lerp(awakeRoot.x, sleepRoot.x, sleep), y: lerp(awakeRoot.y, sleepRoot.y, sleep))
+        let c1   = CGPoint(x: lerp(awakeC1.x, sleepC1.x, sleep),     y: lerp(awakeC1.y, sleepC1.y, sleep))
+        let c2   = CGPoint(x: lerp(awakeC2.x, sleepC2.x, sleep),     y: lerp(awakeC2.y, sleepC2.y, sleep))
+        let tip  = CGPoint(x: lerp(awakeTip.x, sleepTip.x, sleep),   y: lerp(awakeTip.y, sleepTip.y, sleep))
 
         let width: CGFloat = (skin.id == .siamese ? 9.5 : 11.0)
         ctx.saveGState()
@@ -223,20 +247,25 @@ final class CatRenderer {
         }
 
         let isSiamese = (skin.id == .siamese)
+        let sleep = physics.sleepLevel
         let cheekShift = yaw * 3.0
         let crownDrop = pitch * 2.0
         let cheekHalfW: CGFloat = 42.5
         let crownCtrlW: CGFloat = isSiamese ? 25.0 : 26.0
         let crownBaseY: CGFloat = isSiamese ? -29.5 : -30.0
         let cheekY: CGFloat = isSiamese ? 6.5 : 5.0
-        let neckPinchX: CGFloat = isSiamese ? 6.5 : 2.5
-        let neckCtrlY: CGFloat = isSiamese ? 27.5 : 24.0
-        let hipHalfW: CGFloat = isSiamese ? 44.5 : 49.0
-        let waistCtrlW: CGFloat = isSiamese ? 41.0 : 51.5
-        let waistCtrlY: CGFloat = isSiamese ? -50.0 : -48.0
-        let botOuterW: CGFloat = isSiamese ? 42.0 : 47.0
-        let botInnerW: CGFloat = isSiamese ? 32.0 : 36.0
-        let botHalfW: CGFloat = isSiamese ? 22.0 : 24.0
+        let neckPinchXRight: CGFloat = (isSiamese ? 6.5 : 2.5) - sleep * 14.0
+        let neckPinchXLeft: CGFloat = (isSiamese ? 6.5 : 2.5) - sleep * 3.5
+        let neckCtrlY: CGFloat = (isSiamese ? 27.5 : 24.0) - sleep * 22.0
+        let hipHalfW: CGFloat = (isSiamese ? 44.5 : 49.0) + sleep * 5.0
+        let lHipHalfW: CGFloat = (isSiamese ? 44.5 : 49.0) - sleep * 6.0
+        let waistCtrlW: CGFloat = (isSiamese ? 41.0 : 51.5) + sleep * 8.0
+        let lWaistCtrlW: CGFloat = (isSiamese ? 41.0 : 51.5) - sleep * 6.0
+        let waistCtrlY: CGFloat = (isSiamese ? -50.0 : -48.0) - sleep * 4.0
+        let lWaistCtrlY: CGFloat = (isSiamese ? -50.0 : -48.0) + sleep * 34.0
+        let botOuterW: CGFloat = (isSiamese ? 42.0 : 47.0) + sleep * 8.0
+        let botInnerW: CGFloat = (isSiamese ? 32.0 : 36.0) + sleep * 10.0
+        let botHalfW: CGFloat = (isSiamese ? 22.0 : 24.0) + sleep * 12.0
         let leftCheekX: CGFloat = -cheekHalfW + cheekShift * 0.4
         let rightCheekX: CGFloat = cheekHalfW + cheekShift * 0.4
 
@@ -245,18 +274,18 @@ final class CatRenderer {
         let rHip   = B(hipHalfW, -14)
         let rBot   = B(botHalfW, 12)
         let lBot   = B(-botHalfW, 12)
-        let lHip   = B(-hipHalfW, -14)
+        let lHip   = B(-lHipHalfW, -14)
         let lCheek = H(leftCheekX, cheekY)
 
         let cheekCtrlTopY: CGFloat = isSiamese ? -13.0 : -14.0
         let path = CGMutablePath()
         path.move(to: crown)
         path.addCurve(to: rCheek, control1: H(crownCtrlW + cheekShift * 0.3, crownBaseY + crownDrop), control2: H(rightCheekX + 1.5, cheekCtrlTopY))
-        path.addCurve(to: rHip,   control1: H(rightCheekX - neckPinchX, neckCtrlY), control2: B(waistCtrlW, waistCtrlY + breath * 0.5))
+        path.addCurve(to: rHip,   control1: H(rightCheekX - neckPinchXRight, neckCtrlY), control2: B(waistCtrlW, waistCtrlY + breath * 0.5))
         path.addCurve(to: rBot,   control1: B(botOuterW, 5), control2: B(botInnerW, 12))
         path.addLine(to: lBot)
-        path.addCurve(to: lHip,   control1: B(-botInnerW, 12), control2: B(-botOuterW, 5))
-        path.addCurve(to: lCheek, control1: B(-waistCtrlW, waistCtrlY + breath * 0.5), control2: H(leftCheekX + neckPinchX, neckCtrlY))
+        path.addCurve(to: lHip,   control1: B(-botInnerW, 12), control2: B(-lWaistCtrlW, 5))
+        path.addCurve(to: lCheek, control1: B(-lWaistCtrlW, lWaistCtrlY + breath * 0.5), control2: H(leftCheekX + neckPinchXLeft, neckCtrlY))
         path.addCurve(to: crown,  control1: H(leftCheekX - 1.5, cheekCtrlTopY), control2: H(-crownCtrlW + cheekShift * 0.3, crownBaseY + crownDrop))
         path.closeSubpath()
 
@@ -376,37 +405,40 @@ final class CatRenderer {
             ctx.restoreGState()
         }
 
-        // Tucked hind paws peeking softly along bottom edge
-        ctx.saveGState()
-        ctx.translateBy(x: seatX, y: seatY)
-        ctx.rotate(by: bodyTilt)
-        ctx.scaleBy(x: sx, y: sy)
-        ctx.setFillColor(pawColor(skin).cgColor)
+        // Tucked hind paws peeking softly along bottom edge (tucked under when curled in donut sleep)
+        if sleep < 0.65 {
+            ctx.saveGState()
+            ctx.setAlpha(max(0.0, 1.0 - sleep * 1.6))
+            ctx.translateBy(x: seatX, y: seatY)
+            ctx.rotate(by: bodyTilt)
+            ctx.scaleBy(x: sx, y: sy)
+            ctx.setFillColor(pawColor(skin).cgColor)
 
-        let leftHindX: CGFloat = isSiamese ? -31.0 : -35.0
-        let hindW: CGFloat = isSiamese ? 15.5 : 17.0
-        let rightHindX: CGFloat = isSiamese ? 15.5 : 18.0
-        let leftHindY: CGFloat = isSiamese ? 3.5 : 3.0
-        let leftHindH: CGFloat = isSiamese ? 12.0 : 11.0
-        let rightHindY: CGFloat = (skin.id == .black || isSiamese) ? 4.5 : 3.0
-        let rightHindH: CGFloat = (skin.id == .black || isSiamese) ? 12.5 : 11.0
+            let leftHindX: CGFloat = isSiamese ? -31.0 : -35.0
+            let hindW: CGFloat = isSiamese ? 15.5 : 17.0
+            let rightHindX: CGFloat = isSiamese ? 15.5 : 18.0
+            let leftHindY: CGFloat = isSiamese ? 3.5 : 3.0
+            let leftHindH: CGFloat = isSiamese ? 12.0 : 11.0
+            let rightHindY: CGFloat = (skin.id == .black || isSiamese) ? 4.5 : 3.0
+            let rightHindH: CGFloat = (skin.id == .black || isSiamese) ? 12.5 : 11.0
 
-        ctx.fillEllipse(in: CGRect(x: leftHindX, y: leftHindY, width: hindW, height: leftHindH))
-        if physics.idleAction != .scratching || physics.idleActionBlend < 0.02 {
-            ctx.fillEllipse(in: CGRect(x: rightHindX, y: rightHindY, width: hindW, height: rightHindH))
-        }
+            ctx.fillEllipse(in: CGRect(x: leftHindX, y: leftHindY, width: hindW, height: leftHindH))
+            if physics.idleAction != .scratching || physics.idleActionBlend < 0.02 {
+                ctx.fillEllipse(in: CGRect(x: rightHindX, y: rightHindY, width: hindW, height: rightHindH))
+            }
 
-        let rimColor = isSiamese ? Self.siameseCream.withAlphaComponent(0.55) : creaseColor(skin).withAlphaComponent(0.58)
-        ctx.setStrokeColor(rimColor.cgColor)
-        ctx.setLineWidth(1.3)
-        ctx.setLineCap(.round)
-        ctx.addArc(center: CGPoint(x: leftHindX + hindW * 0.5, y: leftHindY + leftHindH * 0.5), radius: 7.5, startAngle: 0.25, endAngle: .pi - 0.25, clockwise: false)
-        ctx.strokePath()
-        if physics.idleAction != .scratching || physics.idleActionBlend < 0.02 {
-            ctx.addArc(center: CGPoint(x: rightHindX + hindW * 0.5, y: rightHindY + rightHindH * 0.5), radius: 7.5, startAngle: 0.25, endAngle: .pi - 0.25, clockwise: false)
+            let rimColor = isSiamese ? Self.siameseCream.withAlphaComponent(0.55) : creaseColor(skin).withAlphaComponent(0.58)
+            ctx.setStrokeColor(rimColor.cgColor)
+            ctx.setLineWidth(1.3)
+            ctx.setLineCap(.round)
+            ctx.addArc(center: CGPoint(x: leftHindX + hindW * 0.5, y: leftHindY + leftHindH * 0.5), radius: 7.5, startAngle: 0.25, endAngle: .pi - 0.25, clockwise: false)
             ctx.strokePath()
+            if physics.idleAction != .scratching || physics.idleActionBlend < 0.02 {
+                ctx.addArc(center: CGPoint(x: rightHindX + hindW * 0.5, y: rightHindY + rightHindH * 0.5), radius: 7.5, startAngle: 0.25, endAngle: .pi - 0.25, clockwise: false)
+                ctx.strokePath()
+            }
+            ctx.restoreGState()
         }
-        ctx.restoreGState()
     }
 
     // MARK: - 2.5D Ears Layer
@@ -418,7 +450,7 @@ final class CatRenderer {
 
         let yawRad = physics.headYaw * 0.50
         let pitchRad = physics.headPitch * 0.36
-        let fold = physics.huntingLevel * 0.22
+        let fold = physics.huntingLevel * 0.22 + physics.sleepLevel * 0.14
         let twitchL = physics.earTwitchLeft * 0.14
         let twitchR = -physics.earTwitchRight * 0.14
 
@@ -516,14 +548,26 @@ final class CatRenderer {
         ctx.setFillColor(skin.palette.nose)
         ctx.addPath(nPath)
         ctx.fillPath()
-        ctx.setStrokeColor(skin.palette.mouth)
-        ctx.setAlpha(0.75)
-        ctx.setLineWidth(1.1)
-        ctx.setLineCap(.round)
-        ctx.move(to: mouthL)
-        ctx.addQuadCurve(to: mouthM, control: CGPoint(x: (mouthL.x + mouthM.x) * 0.5, y: mouthL.y + 1.6))
-        ctx.addQuadCurve(to: mouthR, control: CGPoint(x: (mouthM.x + mouthR.x) * 0.5, y: mouthR.y + 1.6))
-        ctx.strokePath()
+        if physics.yawnLevel > 0.12 {
+            // Cute rounded oval pink yawn mouth
+            let yw = 7.4 * physics.yawnLevel
+            let yh = 9.4 * physics.yawnLevel
+            let yawnRect = CGRect(x: mouthM.x - yw * 0.5, y: mouthM.y - 1.0, width: yw, height: yh)
+            ctx.setFillColor(CGColor(red: 0.90, green: 0.44, blue: 0.54, alpha: 1.0))
+            ctx.fillEllipse(in: yawnRect)
+            ctx.setStrokeColor(skin.palette.outline)
+            ctx.setLineWidth(1.1)
+            ctx.strokeEllipse(in: yawnRect)
+        } else {
+            ctx.setStrokeColor(skin.palette.mouth)
+            ctx.setAlpha(0.75)
+            ctx.setLineWidth(1.1)
+            ctx.setLineCap(.round)
+            ctx.move(to: mouthL)
+            ctx.addQuadCurve(to: mouthM, control: CGPoint(x: (mouthL.x + mouthM.x) * 0.5, y: mouthL.y + 1.6))
+            ctx.addQuadCurve(to: mouthR, control: CGPoint(x: (mouthM.x + mouthR.x) * 0.5, y: mouthR.y + 1.6))
+            ctx.strokePath()
+        }
         ctx.restoreGState()
 
         drawWhiskers3D(in: ctx, yawRad: yawRad, pitchRad: pitchRad, physics: physics, skin: skin)
@@ -551,11 +595,12 @@ final class CatRenderer {
         ctx.translateBy(x: proj.pt.x, y: proj.pt.y)
         ctx.scaleBy(x: foreshortenX, y: foreshortenY)
 
-        // Happy closed eyes when petting or idle grooming/scratching or sleeping
-        let isHappy = physics.pettingLevel > 0.35 || physics.idleAction != .none
+        // Happy closed eyes when petting, yawning, idle grooming/scratching, or sleeping
+        let isHappy = physics.pettingLevel > 0.35 || physics.idleAction != .none || physics.yawnLevel > 0.35
         if isHappy || physics.sleepLevel > 0.65 {
             ctx.setStrokeColor(eyeColor.cgColor)
-            ctx.setLineWidth(2.6)
+            // Delicate, thinner eyelids for sleeping (1.45px) and soft squints (1.85px)
+            ctx.setLineWidth(physics.sleepLevel > 0.5 ? 1.45 : 1.85)
             ctx.setLineCap(.round)
             ctx.move(to: CGPoint(x: -11.5, y: 1.0))
             ctx.addQuadCurve(to: CGPoint(x: 11.5, y: 1.0), control: CGPoint(x: sign * 1.5, y: 3.4))
@@ -717,80 +762,98 @@ final class CatRenderer {
         ctx.restoreGState()
     }
 
-    // MARK: - Fitted Wireless Headphones (Music Listening Mode)
+    // MARK: - Fitted Wireless Headphones (Matching Reference Image)
 
-    private func cupPoint(side: CGFloat, yawRad: CGFloat, pitchRad: CGFloat) -> CGPoint {
-        var pt = projectHead3D(x: side * 45.5, y: -13.0, z: -4.0, yawRad: yawRad, pitchRad: pitchRad).pt
-        // Keep earcups anchored on the outer temple/cheek edge so they never slide onto the eyes
+    private func cupPoint(side: CGFloat, yaw: CGFloat, yawRad: CGFloat, pitchRad: CGFloat) -> CGPoint {
+        var pt = projectHead3D(x: side * 44.5, y: -1.0, z: -2.0, yawRad: yawRad, pitchRad: pitchRad).pt
+        // Match the silhouette's cheekShift (yaw * 3.0) so cups stay pinned to the outer cheek edges
+        let cheekEdge = side * 43.5 + yaw * 3.0
         if side < 0 {
-            pt.x = min(pt.x, -42.5)
+            pt.x = min(pt.x, cheekEdge)
         } else {
-            pt.x = max(pt.x, 42.5)
+            pt.x = max(pt.x, cheekEdge)
         }
         return pt
     }
 
-    private func drawWirelessHeadphones(in ctx: CGContext, center: CGPoint, physics: CatPhysics, skin: SkinSpec) {
+    private func drawWirelessHeadphones(in ctx: CGContext, center: CGPoint, physics: CatPhysics, skin: SkinSpec, eyeTheme: EyeColorTheme) {
         ctx.saveGState()
         ctx.translateBy(x: center.x, y: center.y)
         ctx.rotate(by: physics.headTilt)
         ctx.setAlpha(physics.musicLevel)
 
-        let yawRad = physics.headYaw * 0.50
+        let yaw = physics.headYaw
+        let yawRad = yaw * 0.50
         let pitchRad = physics.headPitch * 0.36
-        let farSign: CGFloat = physics.headYaw >= 0 ? 1.0 : -1.0
+        let farSign: CGFloat = yaw >= 0 ? 1.0 : -1.0
         let nearSign: CGFloat = -farSign
 
-        let leftCup = cupPoint(side: -1, yawRad: yawRad, pitchRad: pitchRad)
-        let rightCup = cupPoint(side: 1, yawRad: yawRad, pitchRad: pitchRad)
+        let leftCup = cupPoint(side: -1, yaw: yaw, yawRad: yawRad, pitchRad: pitchRad)
+        let rightCup = cupPoint(side: 1, yaw: yaw, yawRad: yawRad, pitchRad: pitchRad)
 
-        drawWirelessCup(side: farSign, cup: farSign < 0 ? leftCup : rightCup, physics: physics, skin: skin, in: ctx)
+        drawWirelessCup(side: farSign, cup: farSign < 0 ? leftCup : rightCup, physics: physics, skin: skin, eyeTheme: eyeTheme, in: ctx)
 
+        // Headband uses z: 0..2 so pitch never pushes the band down over the eyes
+        let crownShift = yaw * 1.5
         let bandPts: [CGPoint] = [
             leftCup,
-            projectHead3D(x: -26, y: -31, z: 2, yawRad: yawRad, pitchRad: pitchRad).pt,
-            projectHead3D(x: 0, y: -34, z: 4, yawRad: yawRad, pitchRad: pitchRad).pt,
-            projectHead3D(x: 26, y: -31, z: 2, yawRad: yawRad, pitchRad: pitchRad).pt,
+            CGPoint(x: -31 + crownShift, y: -28),
+            CGPoint(x: crownShift, y: -34.5),
+            CGPoint(x: 31 + crownShift, y: -28),
             rightCup,
         ]
         let bandPath = smoothOpenPath(through: bandPts)
         ctx.addPath(bandPath)
-        ctx.setStrokeColor(skin.palette.outline)
-        ctx.setLineWidth(7.6)
+        ctx.setStrokeColor(CGColor(red: 0.10, green: 0.11, blue: 0.14, alpha: 1.0))
+        ctx.setLineWidth(6.2)
         ctx.setLineCap(.round)
         ctx.strokePath()
 
         ctx.addPath(bandPath)
-        ctx.setStrokeColor(skin.palette.headphoneBand)
-        ctx.setLineWidth(4.5)
+        ctx.setStrokeColor(CGColor(red: 0.24, green: 0.26, blue: 0.31, alpha: 1.0))
+        ctx.setLineWidth(4.0)
         ctx.strokePath()
 
-        drawWirelessCup(side: nearSign, cup: nearSign < 0 ? leftCup : rightCup, physics: physics, skin: skin, in: ctx)
+        // Crisp subtle top highlight arc on headband
+        let hlPts = [
+            CGPoint(x: -16 + crownShift, y: -32.8),
+            CGPoint(x: crownShift, y: -34.8),
+            CGPoint(x: 16 + crownShift, y: -32.8),
+        ]
+        ctx.addPath(smoothOpenPath(through: hlPts))
+        ctx.setStrokeColor(CGColor(red: 0.85, green: 0.88, blue: 0.92, alpha: 0.70))
+        ctx.setLineWidth(1.1)
+        ctx.strokePath()
+
+        drawWirelessCup(side: nearSign, cup: nearSign < 0 ? leftCup : rightCup, physics: physics, skin: skin, eyeTheme: eyeTheme, in: ctx)
         ctx.restoreGState()
     }
 
-    private func drawWirelessCup(side: CGFloat, cup: CGPoint, physics: CatPhysics, skin: SkinSpec, in ctx: CGContext) {
+    private func drawWirelessCup(side: CGFloat, cup: CGPoint, physics: CatPhysics, skin: SkinSpec, eyeTheme: EyeColorTheme, in ctx: CGContext) {
         let depthScale = 1.0 - side * physics.headYaw * 0.14
-        let pulse = 1.0 + (0.5 - 0.5 * cos(physics.musicBeatPhase)) * 0.05
-        let w: CGFloat = 9.5 * max(0.75, depthScale) * pulse
-        let h: CGFloat = 19.0 * pulse
+        let pulse = 1.0 + (0.5 - 0.5 * cos(physics.musicBeatPhase)) * 0.04
+        let w: CGFloat = 7.4 * max(0.75, depthScale) * pulse
+        let h: CGFloat = 17.0 * pulse
+        let ringColor = eyeTheme.primaryNSColor.cgColor
 
         ctx.saveGState()
         ctx.translateBy(x: cup.x, y: cup.y)
-        ctx.rotate(by: -side * 0.12)
+        ctx.rotate(by: -side * 0.08)
 
-        ctx.setFillColor(skin.palette.headphoneCushion)
-        ctx.fillEllipse(in: CGRect(x: -w * 0.85, y: -h * 0.52, width: w * 1.7, height: h * 1.04))
+        // Dark outer earcup shell
+        let cupRect = CGRect(x: -w * 0.65, y: -h * 0.52, width: w * 1.3, height: h * 1.04)
+        ctx.setFillColor(CGColor(red: 0.15, green: 0.17, blue: 0.21, alpha: 1.0))
+        ctx.fillEllipse(in: cupRect)
+        ctx.setStrokeColor(CGColor(red: 0.28, green: 0.31, blue: 0.36, alpha: 0.9))
+        ctx.setLineWidth(1.2)
+        ctx.strokeEllipse(in: cupRect)
 
-        let shellRect = CGRect(x: -w * 0.60 + side * 2.0, y: -h * 0.44, width: w * 1.2, height: h * 0.88)
-        ctx.setFillColor(skin.palette.headphoneCup)
-        ctx.fillEllipse(in: shellRect)
-        ctx.setStrokeColor(skin.palette.outline)
-        ctx.setLineWidth(1.8)
-        ctx.strokeEllipse(in: shellRect)
+        // Thin glowing ring matching the cat's eye color
+        let ringRect = CGRect(x: -w * 0.36 + side * 0.8, y: -h * 0.34, width: w * 0.72, height: h * 0.68)
+        ctx.setStrokeColor(ringColor)
+        ctx.setLineWidth(1.4)
+        ctx.strokeEllipse(in: ringRect)
 
-        ctx.setFillColor(skin.palette.headphoneAccent)
-        ctx.fillEllipse(in: CGRect(x: -2.2 + side * 2.4, y: -3.8, width: 4.4, height: 7.6))
         ctx.restoreGState()
     }
 
