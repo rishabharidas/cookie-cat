@@ -11,6 +11,9 @@ rm -rf "${APP_BUNDLE}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
 cp Resources/Info.plist "${CONTENTS_DIR}/Info.plist"
+if [ -f "Resources/AppIcon.icns" ]; then
+  cp Resources/AppIcon.icns "${RESOURCES_DIR}/AppIcon.icns"
+fi
 
 SOURCES=(
   Sources/SkinSpec.swift
@@ -42,5 +45,8 @@ lipo -create -output "${MACOS_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}-arm64"
 rm -f "${MACOS_DIR}/${APP_NAME}-arm64" "${MACOS_DIR}/${APP_NAME}-x86_64"
 
 codesign --force --deep --sign - "${APP_BUNDLE}" >/dev/null 2>&1 || true
+
+# Ad-hoc sign so macOS Gatekeeper does not report the bundle as "damaged"
+codesign --force --deep --sign - "${APP_BUNDLE}"
 
 echo "Built ${APP_BUNDLE} successfully ($(du -sh "${MACOS_DIR}/${APP_NAME}" | cut -f1))."
